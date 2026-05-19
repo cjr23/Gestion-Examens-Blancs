@@ -1,9 +1,13 @@
 // ========== LOGIN SYSTEM ==========
-const LOGIN_ACCOUNTS = {
-    admin: { password: '***REDACTED***', role: 'Administrateur', access: 'readonly' },
-    administration: { password: '***REDACTED***', role: 'Administration', access: 'full' }
-};
+// LOGIN_ACCOUNTS est défini dans config.local.js (non versionné).
+// Chaque compte contient un `passwordHash` (SHA-256) et non le mot de passe en clair.
+const LOGIN_ACCOUNTS = window.LOGIN_ACCOUNTS || {};
 let currentUserRole = null;
+
+async function sha256Hex(str) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 function selectLoginRole(btn) {
     document.querySelectorAll('.login-role').forEach(b => b.classList.remove('active'));
@@ -22,7 +26,7 @@ function toggleLoginPassword() {
     }
 }
 
-function doLogin() {
+async function doLogin() {
     const user = document.getElementById('loginUser').value.trim().toLowerCase();
     const pass = document.getElementById('loginPass').value;
     const roleBtn = document.querySelector('.login-role.active');
@@ -36,7 +40,8 @@ function doLogin() {
     if (!account) { showLoginError('Rôle invalide.'); return; }
     if (!user) { showLoginError('Veuillez entrer votre identifiant.'); return; }
     if (!pass) { showLoginError('Veuillez entrer votre mot de passe.'); return; }
-    if (user !== role || pass !== account.password) {
+    const passHash = await sha256Hex(pass);
+    if (user !== role || passHash !== account.passwordHash) {
         showLoginError('Identifiant ou mot de passe incorrect.');
         document.querySelector('.login-card').classList.add('login-shake');
         setTimeout(() => document.querySelector('.login-card').classList.remove('login-shake'), 600);

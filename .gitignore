@@ -1,10 +1,11 @@
 # Fichiers sensibles - identifiants et notes personnelles
 Note/
+app/config.local.js
 
-# Param�tres locaux Claude Code
+# Paramètres locaux Claude Code
 .claude/
 
-# Fichiers syst�me Windows
+# Fichiers système Windows
 Thumbs.db
 Desktop.ini
 ehthumbs.db
@@ -14,7 +15,7 @@ $RECYCLE.BIN/
 *.tmp
 ~$*
 
-# Fichiers d'�diteurs
+# Fichiers d'éditeurs
 .vscode/
 .idea/
 *.swp
