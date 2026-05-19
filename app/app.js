@@ -1,12 +1,36 @@
 // ========== LOGIN SYSTEM ==========
-// LOGIN_ACCOUNTS est défini dans config.local.js (non versionné).
-// Chaque compte contient un `passwordHash` (SHA-256) et non le mot de passe en clair.
+// LOGIN_ACCOUNTS (depuis config.local.js) fournit les hashes par défaut.
+// Les hashes personnalisés par l'utilisateur sont stockés dans localStorage.
 const LOGIN_ACCOUNTS = window.LOGIN_ACCOUNTS || {};
+const PASSWORD_STORAGE_KEY = 'examBlanc_passwordHashes';
 let currentUserRole = null;
+let currentUserRoleId = null;
 
 async function sha256Hex(str) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function getStoredPasswordHashes() {
+    try {
+        return JSON.parse(localStorage.getItem(PASSWORD_STORAGE_KEY)) || {};
+    } catch (e) { return {}; }
+}
+
+function getAccountHash(roleId) {
+    const stored = getStoredPasswordHashes();
+    if (stored[roleId]) return stored[roleId];
+    return (LOGIN_ACCOUNTS[roleId] || {}).passwordHash;
+}
+
+function setAccountHash(roleId, hash) {
+    const stored = getStoredPasswordHashes();
+    stored[roleId] = hash;
+    localStorage.setItem(PASSWORD_STORAGE_KEY, JSON.stringify(stored));
+}
+
+function resetAccountPasswords() {
+    localStorage.removeItem(PASSWORD_STORAGE_KEY);
 }
 
 function selectLoginRole(btn) {
@@ -41,7 +65,7 @@ async function doLogin() {
     if (!user) { showLoginError('Veuillez entrer votre identifiant.'); return; }
     if (!pass) { showLoginError('Veuillez entrer votre mot de passe.'); return; }
     const passHash = await sha256Hex(pass);
-    if (user !== role || passHash !== account.passwordHash) {
+    if (user !== role || passHash !== getAccountHash(role)) {
         showLoginError('Identifiant ou mot de passe incorrect.');
         document.querySelector('.login-card').classList.add('login-shake');
         setTimeout(() => document.querySelector('.login-card').classList.remove('login-shake'), 600);
@@ -49,6 +73,7 @@ async function doLogin() {
     }
 
     currentUserRole = account;
+    currentUserRoleId = role;
     sessionStorage.setItem('examBlanc_session', JSON.stringify({ role: role, loggedIn: true }));
     logActivity(`Connexion: ${account.role}`, 'auth');
 
@@ -114,6 +139,7 @@ function checkSession() {
         const session = JSON.parse(sessionStorage.getItem('examBlanc_session'));
         if (session && session.loggedIn) {
             currentUserRole = LOGIN_ACCOUNTS[session.role];
+            currentUserRoleId = session.role;
             document.getElementById('loginPage').style.display = 'none';
             document.getElementById('appWrapper').style.display = 'block';
             resetZoom();
@@ -122,6 +148,65 @@ function checkSession() {
         }
     } catch(e) {}
     return false;
+}
+
+// ========== CHANGE PASSWORD ==========
+function openChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (!modal) return;
+    document.getElementById('cpOldPass').value = '';
+    document.getElementById('cpNewPass').value = '';
+    document.getElementById('cpConfirmPass').value = '';
+    const errEl = document.getElementById('cpError');
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    const okEl = document.getElementById('cpSuccess');
+    if (okEl) { okEl.textContent = ''; okEl.style.display = 'none'; }
+    const lbl = document.getElementById('cpRoleLabel');
+    if (lbl) lbl.textContent = (currentUserRole && currentUserRole.role) ? currentUserRole.role : '';
+    modal.classList.add('show');
+}
+
+function closeChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (modal) modal.classList.remove('show');
+}
+
+function cpShowError(msg) {
+    const el = document.getElementById('cpError');
+    const ok = document.getElementById('cpSuccess');
+    if (ok) { ok.textContent = ''; ok.style.display = 'none'; }
+    if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+function cpShowSuccess(msg) {
+    const el = document.getElementById('cpSuccess');
+    const err = document.getElementById('cpError');
+    if (err) { err.textContent = ''; err.style.display = 'none'; }
+    if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+async function submitChangePassword() {
+    if (!currentUserRoleId) { cpShowError('Session invalide.'); return; }
+    const oldPass = document.getElementById('cpOldPass').value;
+    const newPass = document.getElementById('cpNewPass').value;
+    const confirm = document.getElementById('cpConfirmPass').value;
+
+    if (!oldPass || !newPass || !confirm) { cpShowError('Tous les champs sont obligatoires.'); return; }
+    if (newPass.length < 8) { cpShowError('Le nouveau mot de passe doit contenir au moins 8 caractères.'); return; }
+    if (newPass !== confirm) { cpShowError('La confirmation ne correspond pas.'); return; }
+    if (newPass === oldPass) { cpShowError('Le nouveau mot de passe doit être différent de l\'ancien.'); return; }
+
+    const oldHash = await sha256Hex(oldPass);
+    if (oldHash !== getAccountHash(currentUserRoleId)) {
+        cpShowError('Ancien mot de passe incorrect.');
+        return;
+    }
+
+    const newHash = await sha256Hex(newPass);
+    setAccountHash(currentUserRoleId, newHash);
+    logActivity(`Changement de mot de passe : ${currentUserRole.role}`, 'auth');
+    cpShowSuccess('Mot de passe modifié avec succès.');
+    setTimeout(() => closeChangePasswordModal(), 1500);
 }
 
 function logout() {
