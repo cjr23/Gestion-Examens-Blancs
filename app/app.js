@@ -1149,6 +1149,13 @@ function renderStats(mode, btnEl) {
     else document.querySelector('#statsTabs button').classList.add('active');
     const container = document.getElementById('statsContent');
 
+    // ===== Nouvelles visualisations (v2.0) =====
+    if (mode === 'heatmap') { renderHeatmapView(container); return; }
+    if (mode === 'radar') { renderRadarView(container); return; }
+    if (mode === 'sankey') { renderSankeyView(container); return; }
+    if (mode === 'boxplot') { renderBoxPlotView(container); return; }
+    if (mode === 'calendar') { renderCalendarHeatmapView(container); return; }
+
     if (mode === 'compare') {
         let html = '<div style="text-align:center; margin-bottom:20px;"><h3>COMPARAISON ANNUELLE</h3></div>';
         const snapshots = getYearSnapshots();
@@ -3517,3 +3524,669 @@ ${context}`;
     }
     init();
 })();
+
+// ============================================================
+// === V2.0 ADVANCED VISUALIZATIONS ===========================
+// ============================================================
+
+function _vizGetNumericGrade(val) {
+    if (val === 'ABS' || val === 'INAPTE' || val === '' || val === undefined || val === null) return null;
+    const n = parseFloat(val);
+    return isNaN(n) ? null : n;
+}
+
+function _vizColorForGrade(note) {
+    // 0 = rouge (0°), 10 = jaune (60°), 20 = vert (120°)
+    if (note === null || note === undefined) return '#f5f5f5';
+    const clamped = Math.max(0, Math.min(20, note));
+    const hue = (clamped / 20) * 120;
+    return `hsl(${hue}, 65%, ${45 + (clamped/20) * 10}%)`;
+}
+
+// ============================================================
+// 1. HEATMAP - Élèves × Matières
+// ============================================================
+function renderHeatmapView(container) {
+    const ld = getLevelData();
+    if (!ld.students || ld.students.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Aucun élève dans ce niveau.</p></div>';
+        return;
+    }
+    const subjects = ld.subjects;
+    const students = ld.students.slice();
+    const results = ld.results1 || [];
+
+    // Trier par moyenne décroissante (élèves avec résultats en premier)
+    students.sort((a, b) => {
+        const ra = results.find(r => r.key === stKey(a));
+        const rb = results.find(r => r.key === stKey(b));
+        return (rb ? rb.moyenne : -1) - (ra ? ra.moyenne : -1);
+    });
+
+    let html = `
+        <div class="viz-header">
+            <h3>🔥 Heatmap des notes — ${LEVELS[currentLevel].label}</h3>
+            <p class="viz-subtitle">Vue d'ensemble : chaque cellule colorée selon la note. Rouge = faible, Vert = excellent.</p>
+            <div class="viz-legend">
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:hsl(0,65%,45%)"></span>0-5</span>
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:hsl(30,65%,48%)"></span>5-8</span>
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:hsl(60,65%,51%)"></span>8-10</span>
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:hsl(75,65%,53%)"></span>10-12</span>
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:hsl(95,65%,55%)"></span>12-15</span>
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:hsl(120,65%,55%)"></span>15-20</span>
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:#424242"></span>ABS</span>
+                <span class="viz-leg-item"><span class="viz-leg-sw" style="background:#bdbdbd"></span>INAPTE</span>
+            </div>
+        </div>
+        <div class="heatmap-wrap">
+            <table class="heatmap-table">
+                <thead>
+                    <tr>
+                        <th class="heatmap-fixed-col">N°</th>
+                        <th class="heatmap-fixed-col">Nom / Prénom</th>
+    `;
+    subjects.forEach(s => {
+        html += `<th title="${s.name} (coef ${s.coef})">${s.code}</th>`;
+    });
+    html += `<th class="heatmap-moy-col">Moy.</th><th>Déc.</th></tr></thead><tbody>`;
+
+    students.forEach((s, idx) => {
+        const key = stKey(s);
+        const stGrades = (ld.grades1 || {})[key] || {};
+        const result = results.find(r => r.key === key);
+        const moy = result ? result.moyenne : null;
+        const dec = result ? result.decision : '—';
+        const decClass = dec === 'Admis' ? 'dec-admis' : dec === '2ème Tour' ? 'dec-tour2' : dec === 'Ajourné' ? 'dec-ajourne' : '';
+
+        html += `<tr>
+            <td class="heatmap-fixed-col">${idx+1}</td>
+            <td class="heatmap-fixed-col heatmap-name">${s.nom || ''} ${s.prenom || ''}</td>`;
+        subjects.forEach(subj => {
+            const val = stGrades[subj.code];
+            if (val === 'ABS') {
+                html += `<td class="heatmap-cell heatmap-abs" title="${s.nom} - ${subj.name} : Absent">ABS</td>`;
+            } else if (val === 'INAPTE') {
+                html += `<td class="heatmap-cell heatmap-inapte" title="${s.nom} - ${subj.name} : Inapte">–</td>`;
+            } else {
+                const num = _vizGetNumericGrade(val);
+                if (num === null) {
+                    html += `<td class="heatmap-cell heatmap-empty">·</td>`;
+                } else {
+                    const color = _vizColorForGrade(num);
+                    const textColor = num < 7 || num > 14 ? 'white' : '#222';
+                    html += `<td class="heatmap-cell" style="background:${color};color:${textColor}" title="${s.nom} - ${subj.name} (coef ${subj.coef}) : ${num.toFixed(2)}/20">${num.toFixed(1)}</td>`;
+                }
+            }
+        });
+        if (moy !== null) {
+            const color = _vizColorForGrade(moy);
+            const textColor = moy < 7 || moy > 14 ? 'white' : '#222';
+            html += `<td class="heatmap-moy-col" style="background:${color};color:${textColor};font-weight:700">${moy.toFixed(2)}</td>`;
+        } else {
+            html += `<td class="heatmap-moy-col heatmap-empty">—</td>`;
+        }
+        html += `<td class="heatmap-dec ${decClass}">${dec}</td>`;
+        html += `</tr>`;
+    });
+    html += '</tbody></table></div>';
+
+    // Stats par matière en bas
+    html += '<div class="viz-header" style="margin-top:24px;"><h3>Moyennes par matière</h3></div>';
+    html += '<div class="heatmap-wrap"><table class="heatmap-table"><thead><tr><th>Matière</th><th>Coef</th><th>Moyenne</th><th>Notés</th><th>Abs</th><th>Échec (&lt;10)</th></tr></thead><tbody>';
+    subjects.forEach(subj => {
+        let sum = 0, count = 0, abs = 0, fail = 0;
+        students.forEach(s => {
+            const v = (ld.grades1 || {})[stKey(s)] || {};
+            const raw = v[subj.code];
+            if (raw === 'ABS') abs++;
+            else {
+                const n = _vizGetNumericGrade(raw);
+                if (n !== null) { sum += n; count++; if (n < 10) fail++; }
+            }
+        });
+        const avg = count > 0 ? sum / count : 0;
+        const color = _vizColorForGrade(avg);
+        html += `<tr><td style="font-weight:600">${subj.name} (${subj.code})</td><td>${subj.coef}</td><td style="background:${color};color:${avg<7||avg>14?'white':'#222'};font-weight:700">${avg.toFixed(2)}</td><td>${count}</td><td>${abs}</td><td style="color:${fail>count/2?'#c62828':'#666'};font-weight:600">${fail}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+
+    container.innerHTML = html;
+}
+
+// ============================================================
+// 2. RADAR CHART - Profil d'un élève
+// ============================================================
+function renderRadarView(container) {
+    const ld = getLevelData();
+    if (!ld.students || ld.students.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Aucun élève dans ce niveau.</p></div>';
+        return;
+    }
+    const subjects = ld.subjects;
+    const students = ld.students.slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+
+    let options = students.map(s => `<option value="${stKey(s)}">${s.nom} ${s.prenom} (n°${s.numTable})</option>`).join('');
+
+    container.innerHTML = `
+        <div class="viz-header">
+            <h3>🎯 Profil élève — radar par matière</h3>
+            <p class="viz-subtitle">Comparez les notes d'un élève à la moyenne de la classe et à la cible (10/20).</p>
+            <div style="margin-top:12px;">
+                <label style="font-weight:600;margin-right:8px;">Élève :</label>
+                <select id="radarStudentSelect" onchange="updateRadarChart()" style="padding:8px 12px;border-radius:6px;border:1px solid #ddd;min-width:300px;">
+                    <option value="">-- Choisir un élève --</option>
+                    ${options}
+                </select>
+            </div>
+        </div>
+        <div class="radar-wrap" style="max-width:700px;margin:20px auto;">
+            <canvas id="radarStudentChart" style="max-height:500px;"></canvas>
+        </div>
+        <div id="radarStudentInfo" style="text-align:center;margin-top:16px;color:#666;"></div>
+    `;
+}
+
+function updateRadarChart() {
+    const ld = getLevelData();
+    const key = document.getElementById('radarStudentSelect').value;
+    if (!key) return;
+    const student = ld.students.find(s => stKey(s) === key);
+    if (!student) return;
+    const subjects = ld.subjects;
+    const stGrades = (ld.grades1 || {})[key] || {};
+
+    // Calcul moyenne classe par matière
+    const classAvgs = subjects.map(subj => {
+        let sum = 0, n = 0;
+        ld.students.forEach(s => {
+            const v = (ld.grades1 || {})[stKey(s)] || {};
+            const num = _vizGetNumericGrade(v[subj.code]);
+            if (num !== null) { sum += num; n++; }
+        });
+        return n > 0 ? sum / n : 0;
+    });
+    const studentVals = subjects.map(s => _vizGetNumericGrade(stGrades[s.code]) || 0);
+    const targetVals = subjects.map(() => 10);
+
+    destroyChart('radarStudentChart');
+    _chartInstances['radarStudentChart'] = new Chart(document.getElementById('radarStudentChart'), {
+        type: 'radar',
+        data: {
+            labels: subjects.map(s => s.code),
+            datasets: [
+                {
+                    label: `${student.prenom} ${student.nom}`,
+                    data: studentVals,
+                    backgroundColor: 'rgba(102,126,234,0.25)',
+                    borderColor: '#667eea',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#667eea',
+                    pointRadius: 4
+                },
+                {
+                    label: 'Moyenne classe',
+                    data: classAvgs,
+                    backgroundColor: 'rgba(245,158,11,0.15)',
+                    borderColor: '#f59e0b',
+                    borderWidth: 2,
+                    borderDash: [5,5],
+                    pointBackgroundColor: '#f59e0b',
+                    pointRadius: 3
+                },
+                {
+                    label: 'Cible (10/20)',
+                    data: targetVals,
+                    backgroundColor: 'rgba(16,185,129,0.05)',
+                    borderColor: '#10b981',
+                    borderWidth: 1,
+                    borderDash: [2,3],
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                r: {
+                    min: 0,
+                    max: 20,
+                    ticks: { stepSize: 5 }
+                }
+            },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const subj = subjects[ctx.dataIndex];
+                            return `${ctx.dataset.label}: ${ctx.parsed.r.toFixed(2)}/20 (${subj.name})`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    const result = (ld.results1 || []).find(r => r.key === key);
+    const info = document.getElementById('radarStudentInfo');
+    if (result) {
+        info.innerHTML = `<strong>Moyenne générale :</strong> ${result.moyenne.toFixed(2)}/20 · <strong>Décision :</strong> ${result.decision} · <strong>Rang :</strong> ${result.rang}`;
+    } else {
+        info.innerHTML = `<em>Résultats non calculés pour cet élève.</em>`;
+    }
+}
+
+// ============================================================
+// 3. SANKEY - Flux des résultats
+// ============================================================
+function renderSankeyView(container) {
+    const ld = getLevelData();
+    const inscrits = ld.students.length;
+    const results1 = ld.results1 || [];
+    const results2 = ld.results2 || [];
+    const presents = results1.length;
+    const absents = inscrits - presents;
+    const admis1 = results1.filter(r => r.decision === 'Admis').length;
+    const tour2Count = results1.filter(r => r.decision === '2ème Tour').length;
+    const ajournes1 = results1.filter(r => r.decision === 'Ajourné').length;
+    const admis2 = results2.filter(r => r.decision === 'Admis').length;
+    const ajournes2 = tour2Count - admis2;
+
+    if (inscrits === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Aucun élève à analyser.</p></div>';
+        return;
+    }
+
+    const totalH = 500;
+    const pxPer = Math.max(1, totalH / Math.max(inscrits, 1));
+    const h = n => Math.max(8, n * pxPer);
+
+    container.innerHTML = `
+        <div class="viz-header">
+            <h3>🌊 Parcours des élèves — ${LEVELS[currentLevel].label}</h3>
+            <p class="viz-subtitle">Flux complet : de l'inscription au verdict final. Hauteur = nombre d'élèves.</p>
+        </div>
+        <div class="sankey-wrap">
+            <div class="sankey-col">
+                <div class="sankey-col-title">Inscrits</div>
+                <div class="sankey-node sankey-node-blue" style="height:${h(inscrits)}px;">
+                    <div class="sankey-node-label">Inscrits<br><strong>${inscrits}</strong></div>
+                </div>
+            </div>
+            <svg class="sankey-link" viewBox="0 0 100 ${totalH}" preserveAspectRatio="none">
+                <path d="M0,0 C50,0 50,0 100,0 L100,${h(presents)} C50,${h(presents)} 50,0 0,0 Z" fill="rgba(33,150,243,0.35)"/>
+                <path d="M0,${h(inscrits)} C50,${h(inscrits)} 50,${h(presents)} 100,${h(presents)} L100,${h(presents) + h(absents)} C50,${h(presents) + h(absents)} 50,${h(inscrits)} 0,${h(inscrits)} Z" fill="rgba(120,120,120,0.25)"/>
+            </svg>
+            <div class="sankey-col">
+                <div class="sankey-col-title">Session</div>
+                <div class="sankey-node sankey-node-blue" style="height:${h(presents)}px;">
+                    <div class="sankey-node-label">Présents<br><strong>${presents}</strong></div>
+                </div>
+                ${absents > 0 ? `<div class="sankey-node sankey-node-gray" style="height:${h(absents)}px;margin-top:4px;">
+                    <div class="sankey-node-label">Absents<br><strong>${absents}</strong></div>
+                </div>` : ''}
+            </div>
+            <svg class="sankey-link" viewBox="0 0 100 ${totalH}" preserveAspectRatio="none">
+                <path d="M0,0 C50,0 50,0 100,0 L100,${h(admis1)} C50,${h(admis1)} 50,0 0,0 Z" fill="rgba(16,185,129,0.35)"/>
+                <path d="M0,${h(admis1)} C50,${h(admis1)} 50,${h(admis1)} 100,${h(admis1)} L100,${h(admis1)+h(tour2Count)} C50,${h(admis1)+h(tour2Count)} 50,${h(admis1)} 0,${h(admis1)} Z" fill="rgba(245,158,11,0.35)"/>
+                <path d="M0,${h(admis1)+h(tour2Count)} C50,${h(admis1)+h(tour2Count)} 50,${h(admis1)+h(tour2Count)} 100,${h(admis1)+h(tour2Count)} L100,${h(presents)} C50,${h(presents)} 50,${h(admis1)+h(tour2Count)} 0,${h(admis1)+h(tour2Count)} Z" fill="rgba(239,68,68,0.35)"/>
+            </svg>
+            <div class="sankey-col">
+                <div class="sankey-col-title">1er Tour</div>
+                <div class="sankey-node sankey-node-green" style="height:${h(admis1)}px;">
+                    <div class="sankey-node-label">Admis<br><strong>${admis1}</strong></div>
+                </div>
+                <div class="sankey-node sankey-node-orange" style="height:${h(tour2Count)}px;margin-top:4px;">
+                    <div class="sankey-node-label">2ème Tour<br><strong>${tour2Count}</strong></div>
+                </div>
+                <div class="sankey-node sankey-node-red" style="height:${h(ajournes1)}px;margin-top:4px;">
+                    <div class="sankey-node-label">Ajournés<br><strong>${ajournes1}</strong></div>
+                </div>
+            </div>
+            <svg class="sankey-link" viewBox="0 0 100 ${totalH}" preserveAspectRatio="none">
+                <path d="M0,0 C50,0 50,0 100,0 L100,${h(admis1)} C50,${h(admis1)} 50,0 0,0 Z" fill="rgba(16,185,129,0.5)"/>
+                <path d="M0,${h(admis1)} C50,${h(admis1)} 50,${h(admis1)} 100,${h(admis1)} L100,${h(admis1)+h(admis2)} C50,${h(admis1)+h(admis2)} 50,${h(admis1)} 0,${h(admis1)} Z" fill="rgba(16,185,129,0.3)"/>
+                <path d="M0,${h(admis1)+h(tour2Count)} C50,${h(admis1)+h(tour2Count)} 50,${h(admis1)+h(admis2)} 100,${h(admis1)+h(admis2)} L100,${h(admis1)+h(admis2)+h(ajournes1+ajournes2)} C50,${h(admis1)+h(admis2)+h(ajournes1+ajournes2)} 50,${h(admis1)+h(tour2Count)} 0,${h(admis1)+h(tour2Count)} Z" fill="rgba(239,68,68,0.4)"/>
+            </svg>
+            <div class="sankey-col">
+                <div class="sankey-col-title">Final</div>
+                <div class="sankey-node sankey-node-green" style="height:${h(admis1+admis2)}px;">
+                    <div class="sankey-node-label">✓ Admis<br><strong>${admis1+admis2}</strong><br><small>${presents>0?((admis1+admis2)/presents*100).toFixed(1):0}%</small></div>
+                </div>
+                <div class="sankey-node sankey-node-red" style="height:${h(ajournes1+ajournes2)}px;margin-top:4px;">
+                    <div class="sankey-node-label">✗ Refusés<br><strong>${ajournes1+ajournes2}</strong><br><small>${presents>0?((ajournes1+ajournes2)/presents*100).toFixed(1):0}%</small></div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// 4. BOX PLOTS - Distribution par matière
+// ============================================================
+function renderBoxPlotView(container) {
+    const ld = getLevelData();
+    if (!ld.students || ld.students.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Aucun élève dans ce niveau.</p></div>';
+        return;
+    }
+    const subjects = ld.subjects;
+
+    container.innerHTML = `
+        <div class="viz-header">
+            <h3>📊 Distribution des notes par matière</h3>
+            <p class="viz-subtitle">Pour chaque matière : minimum, 1er quartile, médiane, 3ème quartile, maximum. Détecte les disparités.</p>
+        </div>
+        <div class="boxplot-wrap" id="boxplotChartWrap"></div>
+    `;
+
+    const wrap = document.getElementById('boxplotChartWrap');
+    const allStats = subjects.map(subj => {
+        const notes = [];
+        ld.students.forEach(s => {
+            const v = (ld.grades1 || {})[stKey(s)] || {};
+            const n = _vizGetNumericGrade(v[subj.code]);
+            if (n !== null) notes.push(n);
+        });
+        notes.sort((a,b) => a - b);
+        if (notes.length === 0) return { subj, empty: true };
+        const q = p => {
+            const idx = (notes.length - 1) * p;
+            const lo = Math.floor(idx), hi = Math.ceil(idx);
+            return lo === hi ? notes[lo] : notes[lo] + (notes[hi] - notes[lo]) * (idx - lo);
+        };
+        return {
+            subj,
+            min: notes[0],
+            q1: q(0.25),
+            median: q(0.5),
+            q3: q(0.75),
+            max: notes[notes.length-1],
+            count: notes.length,
+            mean: notes.reduce((a,b)=>a+b,0) / notes.length
+        };
+    });
+
+    let html = '<div class="boxplot-list">';
+    allStats.forEach(s => {
+        if (s.empty) {
+            html += `<div class="boxplot-row"><div class="boxplot-label">${s.subj.code}</div><div class="boxplot-track"><span style="color:#999;font-size:12px;">Aucune note</span></div></div>`;
+            return;
+        }
+        const toPct = v => (v / 20) * 100;
+        const boxColor = _vizColorForGrade(s.median);
+        html += `
+            <div class="boxplot-row">
+                <div class="boxplot-label" title="${s.subj.name}">${s.subj.code}<br><small style="font-weight:400;color:#888">${s.count} notes</small></div>
+                <div class="boxplot-track">
+                    <div class="boxplot-scale">
+                        <span>0</span><span>5</span><span>10</span><span>15</span><span>20</span>
+                    </div>
+                    <div class="boxplot-line" style="left:${toPct(s.min)}%;right:${100 - toPct(s.max)}%"></div>
+                    <div class="boxplot-box" style="left:${toPct(s.q1)}%;width:${toPct(s.q3) - toPct(s.q1)}%;background:${boxColor};"></div>
+                    <div class="boxplot-median" style="left:${toPct(s.median)}%;" title="Médiane : ${s.median.toFixed(2)}"></div>
+                    <div class="boxplot-min" style="left:${toPct(s.min)}%" title="Min : ${s.min.toFixed(2)}"></div>
+                    <div class="boxplot-max" style="left:${toPct(s.max)}%" title="Max : ${s.max.toFixed(2)}"></div>
+                    <div class="boxplot-mean" style="left:${toPct(s.mean)}%" title="Moyenne : ${s.mean.toFixed(2)}"></div>
+                </div>
+                <div class="boxplot-stats">
+                    <span title="Médiane"><strong>${s.median.toFixed(1)}</strong></span>
+                    <span title="Min - Max" style="color:#888;font-size:11px;">${s.min.toFixed(1)}-${s.max.toFixed(1)}</span>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    html += `
+        <div class="viz-legend" style="margin-top:16px;">
+            <span class="viz-leg-item"><span class="viz-leg-sw" style="background:#667eea;width:30px;height:8px;"></span>Étendue (min → max)</span>
+            <span class="viz-leg-item"><span class="viz-leg-sw" style="background:hsl(75,65%,53%);width:30px;height:14px;"></span>Boîte (Q1 → Q3, 50% des élèves)</span>
+            <span class="viz-leg-item"><span class="viz-leg-sw" style="background:#000;width:2px;height:20px;"></span>Médiane</span>
+            <span class="viz-leg-item"><span class="viz-leg-sw" style="background:#e91e63;width:8px;height:8px;border-radius:50%;"></span>Moyenne</span>
+        </div>
+    `;
+    wrap.innerHTML = html;
+}
+
+// ============================================================
+// 5. CALENDAR HEATMAP - Activité de saisie
+// ============================================================
+function renderCalendarHeatmapView(container) {
+    // Reconstituer l'activité depuis le journal
+    const log = (appData && appData.activityLog) ? appData.activityLog : [];
+    const counts = {};
+    log.forEach(entry => {
+        const d = new Date(entry.time || entry.date || Date.now());
+        const key = d.toISOString().slice(0,10);
+        counts[key] = (counts[key] || 0) + 1;
+    });
+
+    // Génération de la grille (12 dernières semaines = 84 jours)
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const days = [];
+    for (let i = 83; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const key = d.toISOString().slice(0,10);
+        days.push({ date: new Date(d), key, count: counts[key] || 0 });
+    }
+
+    const realMax = Math.max(0, ...days.map(d => d.count));
+    const maxCount = Math.max(1, realMax);
+    const monthNames = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+
+    container.innerHTML = `
+        <div class="viz-header">
+            <h3>📅 Activité de saisie — 12 dernières semaines</h3>
+            <p class="viz-subtitle">Chaque carré = un jour. Plus c'est foncé, plus d'actions ont été enregistrées dans le journal.</p>
+        </div>
+        <div class="calheatmap-wrap">
+            <div class="calheatmap-grid" id="calHeatmapGrid"></div>
+            <div class="calheatmap-legend">
+                <span>Moins</span>
+                <span class="calheatmap-leg" style="background:#ebedf0"></span>
+                <span class="calheatmap-leg" style="background:#9be9a8"></span>
+                <span class="calheatmap-leg" style="background:#40c463"></span>
+                <span class="calheatmap-leg" style="background:#30a14e"></span>
+                <span class="calheatmap-leg" style="background:#216e39"></span>
+                <span>Plus</span>
+            </div>
+        </div>
+        <div class="calheatmap-stats">
+            <div class="calheatmap-stat"><div class="number">${log.length}</div><div class="label">Actions totales</div></div>
+            <div class="calheatmap-stat"><div class="number">${days.filter(d=>d.count>0).length}</div><div class="label">Jours actifs (84j)</div></div>
+            <div class="calheatmap-stat"><div class="number">${realMax}</div><div class="label">Pic d'activité (jour)</div></div>
+        </div>
+    `;
+
+    const grid = document.getElementById('calHeatmapGrid');
+    // Organiser en colonnes (semaines) - dimanche en haut
+    let html = '';
+    for (let w = 0; w < 12; w++) {
+        html += '<div class="calheatmap-week">';
+        for (let d = 0; d < 7; d++) {
+            const idx = w * 7 + d;
+            if (idx >= days.length) { html += '<div class="calheatmap-day-empty"></div>'; continue; }
+            const day = days[idx];
+            const intensity = day.count === 0 ? 0 : Math.min(4, Math.ceil((day.count / maxCount) * 4));
+            const colors = ['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39'];
+            const dateStr = day.date.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+            html += `<div class="calheatmap-day" style="background:${colors[intensity]}" title="${dateStr} : ${day.count} action${day.count>1?'s':''}"></div>`;
+        }
+        html += '</div>';
+    }
+    grid.innerHTML = html;
+}
+
+// ============================================================
+// 6. PRESENTATION MODE - Délibération plein écran
+// ============================================================
+function openPresentationMode() {
+    const ld = getLevelData();
+    if (!ld.results1 || ld.results1.length === 0) {
+        alert('Veuillez d\'abord calculer les résultats.');
+        return;
+    }
+
+    let overlay = document.getElementById('presentationOverlay');
+    if (overlay) overlay.remove();
+
+    overlay = document.createElement('div');
+    overlay.id = 'presentationOverlay';
+    overlay.className = 'presentation-overlay';
+
+    const results = ld.results1.slice().sort((a,b) => b.moyenne - a.moyenne);
+    const admis1 = results.filter(r => r.decision === 'Admis').length;
+    const tour2 = results.filter(r => r.decision === '2ème Tour').length;
+    const ajournes = results.filter(r => r.decision === 'Ajourné').length;
+    const totalAdmis = admis1 + ((ld.results2 || []).filter(r => r.decision === 'Admis').length);
+
+    overlay.innerHTML = `
+        <div class="presentation-header">
+            <div class="presentation-title">
+                <div class="presentation-school">Collège Jean XXIII — Tambacounda</div>
+                <div class="presentation-exam">${LEVELS[currentLevel].examLabel || 'Examen Blanc'} — ${LEVELS[currentLevel].label}</div>
+                <div class="presentation-year">Année ${appData.year || ''}</div>
+            </div>
+            <button class="presentation-close" onclick="closePresentationMode()" title="Quitter (Esc)">✕</button>
+        </div>
+
+        <div class="presentation-counters">
+            <div class="presentation-counter presentation-counter-green">
+                <div class="presentation-counter-num" data-target="${totalAdmis}">0</div>
+                <div class="presentation-counter-label">Total Admis</div>
+            </div>
+            <div class="presentation-counter presentation-counter-blue">
+                <div class="presentation-counter-num" data-target="${admis1}">0</div>
+                <div class="presentation-counter-label">Admis 1er Tour</div>
+            </div>
+            <div class="presentation-counter presentation-counter-orange">
+                <div class="presentation-counter-num" data-target="${tour2}">0</div>
+                <div class="presentation-counter-label">2ème Tour</div>
+            </div>
+            <div class="presentation-counter presentation-counter-red">
+                <div class="presentation-counter-num" data-target="${ajournes}">0</div>
+                <div class="presentation-counter-label">Ajournés</div>
+            </div>
+        </div>
+
+        <div class="presentation-main">
+            <div class="presentation-panel presentation-panel-list">
+                <h3>Délibération en cours</h3>
+                <div class="presentation-current" id="presentationCurrent">
+                    <div class="presentation-current-info">Appuyez sur <kbd>Espace</kbd> pour démarrer</div>
+                </div>
+                <div class="presentation-progress">
+                    <div class="presentation-progress-bar" id="presentationProgressBar"></div>
+                </div>
+                <div class="presentation-progress-text" id="presentationProgressText">0 / ${results.length}</div>
+            </div>
+            <div class="presentation-panel presentation-panel-chart">
+                <h3>Répartition</h3>
+                <div class="presentation-donut" style="background:conic-gradient(
+                    #10b981 0% ${results.length>0?(admis1/results.length*100):0}%,
+                    #f59e0b ${results.length>0?(admis1/results.length*100):0}% ${results.length>0?((admis1+tour2)/results.length*100):0}%,
+                    #ef4444 ${results.length>0?((admis1+tour2)/results.length*100):0}% 100%
+                );"></div>
+                <div class="presentation-donut-legend">
+                    <div><span class="dot" style="background:#10b981"></span>Admis</div>
+                    <div><span class="dot" style="background:#f59e0b"></span>2e Tour</div>
+                    <div><span class="dot" style="background:#ef4444"></span>Ajourné</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="presentation-footer">
+            <span><kbd>Espace</kbd> / <kbd>→</kbd> Suivant</span>
+            <span><kbd>←</kbd> Précédent</span>
+            <span><kbd>A</kbd> Auto-play</span>
+            <span><kbd>Esc</kbd> Quitter</span>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Animate counters
+    overlay.querySelectorAll('.presentation-counter-num').forEach(el => {
+        const target = parseInt(el.dataset.target, 10);
+        const start = Date.now();
+        const dur = 1200;
+        const tick = () => {
+            const p = Math.min(1, (Date.now() - start) / dur);
+            const eased = 1 - Math.pow(1 - p, 3);
+            el.textContent = Math.round(eased * target);
+            if (p < 1) requestAnimationFrame(tick);
+        };
+        tick();
+    });
+
+    // Setup keyboard navigation
+    _presentationResults = results;
+    _presentationIndex = -1;
+    _presentationAutoplay = false;
+    _presentationKeyHandler = e => {
+        if (e.key === 'Escape') { closePresentationMode(); }
+        else if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); _presentationNext(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); _presentationPrev(); }
+        else if (e.key.toLowerCase() === 'a') { _presentationToggleAutoplay(); }
+    };
+    document.addEventListener('keydown', _presentationKeyHandler);
+    overlay.focus();
+}
+
+let _presentationResults = [];
+let _presentationIndex = -1;
+let _presentationAutoplay = false;
+let _presentationAutoplayTimer = null;
+let _presentationKeyHandler = null;
+
+function _presentationShowAt(idx) {
+    if (idx < 0 || idx >= _presentationResults.length) return;
+    _presentationIndex = idx;
+    const r = _presentationResults[idx];
+    const decColor = r.decision === 'Admis' ? '#10b981' : r.decision === '2ème Tour' ? '#f59e0b' : '#ef4444';
+    const decIcon = r.decision === 'Admis' ? '✓' : r.decision === '2ème Tour' ? '⟳' : '✗';
+    const target = document.getElementById('presentationCurrent');
+    if (!target) return;
+    target.innerHTML = `
+        <div class="presentation-card presentation-card-anim">
+            <div class="presentation-rang">#${r.rang}</div>
+            <div class="presentation-student-name">${r.student.prenom || ''} ${r.student.nom || ''}</div>
+            <div class="presentation-student-num">N° ${r.student.numTable || ''}${r.student.anonymat ? ' · ' + r.student.anonymat : ''}</div>
+            <div class="presentation-moy" style="color:${decColor}">${r.moyenne.toFixed(2)}<small>/20</small></div>
+            <div class="presentation-decision" style="background:${decColor}">${decIcon} ${r.decision}${r.mention ? ' — ' + r.mention : ''}</div>
+        </div>
+    `;
+    const pct = ((idx+1) / _presentationResults.length) * 100;
+    document.getElementById('presentationProgressBar').style.width = pct + '%';
+    document.getElementById('presentationProgressText').textContent = `${idx+1} / ${_presentationResults.length}`;
+}
+
+function _presentationNext() {
+    if (_presentationIndex < _presentationResults.length - 1) {
+        _presentationShowAt(_presentationIndex + 1);
+    } else if (_presentationAutoplay) {
+        _presentationToggleAutoplay();
+    }
+}
+
+function _presentationPrev() {
+    if (_presentationIndex > 0) _presentationShowAt(_presentationIndex - 1);
+}
+
+function _presentationToggleAutoplay() {
+    _presentationAutoplay = !_presentationAutoplay;
+    if (_presentationAutoplay) {
+        _presentationAutoplayTimer = setInterval(() => _presentationNext(), 1500);
+    } else {
+        clearInterval(_presentationAutoplayTimer);
+    }
+}
+
+function closePresentationMode() {
+    const ov = document.getElementById('presentationOverlay');
+    if (ov) ov.remove();
+    if (_presentationKeyHandler) document.removeEventListener('keydown', _presentationKeyHandler);
+    if (_presentationAutoplayTimer) clearInterval(_presentationAutoplayTimer);
+    _presentationAutoplay = false;
+}

@@ -370,6 +370,16 @@
                 <button class="active" onclick="renderStats('current', this)">Niveau sélectionné</button>
                 <button onclick="renderStats('all', this)">Tous les niveaux</button>
                 <button onclick="renderStats('compare', this)">Comparaison annuelle</button>
+                <button onclick="renderStats('heatmap', this)">🔥 Heatmap</button>
+                <button onclick="renderStats('radar', this)">🎯 Profil élève</button>
+                <button onclick="renderStats('sankey', this)">🌊 Parcours (Sankey)</button>
+                <button onclick="renderStats('boxplot', this)">📊 Distribution</button>
+                <button onclick="renderStats('calendar', this)">📅 Activité</button>
+            </div>
+            <div class="presentation-launch" style="margin-bottom:12px;">
+                <button class="btn btn-primary" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;" onclick="openPresentationMode()">
+                    🎬 Mode Présentation Délibération
+                </button>
             </div>
             <div id="statsContent"><div class="empty-state"><p>Veuillez d'abord calculer les résultats.</p></div></div>
         </div>

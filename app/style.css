@@ -4302,3 +4302,149 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
     .tc-card { max-width: 440px !important; }
 }
 
+/* ============================================================
+   V2.0 ADVANCED VISUALIZATIONS
+   ============================================================ */
+
+.viz-header { margin-bottom: 18px; }
+.viz-header h3 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+.viz-subtitle { color: #666; font-size: 13px; margin: 0; }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12px; }
+.viz-leg-item { display: inline-flex; align-items: center; gap: 6px; }
+.viz-leg-sw { display: inline-block; width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.08); }
+
+.presentation-launch { display: flex; justify-content: flex-end; }
+.presentation-launch button { padding: 12px 22px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 18px rgba(118,75,162,0.35); transition: transform .2s, box-shadow .2s; }
+.presentation-launch button:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(118,75,162,0.5); }
+
+/* === HEATMAP === */
+.heatmap-wrap { overflow-x: auto; max-width: 100%; border: 1px solid #e0e0e0; border-radius: 8px; }
+.heatmap-table { border-collapse: collapse; font-size: 12px; width: 100%; min-width: 600px; }
+.heatmap-table th, .heatmap-table td { border: 1px solid #eee; padding: 6px 8px; text-align: center; white-space: nowrap; }
+.heatmap-table thead th { background: #f5f5f5; font-weight: 700; position: sticky; top: 0; z-index: 2; }
+.heatmap-fixed-col { background: #fafafa; font-weight: 600; text-align: left !important; position: sticky; left: 0; z-index: 1; }
+.heatmap-table thead .heatmap-fixed-col { z-index: 3; }
+.heatmap-name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.heatmap-cell { font-weight: 600; transition: transform .1s; cursor: default; }
+.heatmap-cell:hover { transform: scale(1.15); z-index: 5; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.heatmap-abs { background: #424242; color: white; font-size: 10px; font-weight: 700; }
+.heatmap-inapte { background: #bdbdbd; color: white; }
+.heatmap-empty { color: #ccc; }
+.heatmap-moy-col { font-weight: 700; }
+.heatmap-dec { padding: 4px 8px; font-weight: 600; font-size: 11px; }
+.heatmap-dec.dec-admis { background: #c8e6c9; color: #1b5e20; }
+.heatmap-dec.dec-tour2 { background: #ffecb3; color: #e65100; }
+.heatmap-dec.dec-ajourne { background: #ffcdd2; color: #b71c1c; }
+
+/* === SANKEY === */
+.sankey-wrap { display: flex; align-items: flex-start; gap: 0; padding: 20px 0; min-height: 540px; }
+.sankey-col { display: flex; flex-direction: column; min-width: 130px; }
+.sankey-col-title { font-weight: 700; font-size: 13px; margin-bottom: 10px; color: #555; text-align: center; padding-bottom: 6px; border-bottom: 2px solid #eee; }
+.sankey-node { border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 13px; text-align: center; transition: transform .15s; }
+.sankey-node:hover { transform: translateX(3px); box-shadow: 0 3px 12px rgba(0,0,0,0.2); }
+.sankey-node-label { line-height: 1.3; }
+.sankey-node-label small { opacity: 0.85; font-weight: 500; }
+.sankey-node-blue { background: #2196f3; }
+.sankey-node-gray { background: #888; }
+.sankey-node-green { background: #10b981; }
+.sankey-node-orange { background: #f59e0b; }
+.sankey-node-red { background: #ef4444; }
+.sankey-link { flex: 1; min-width: 40px; height: 500px; align-self: flex-start; margin-top: 35px; }
+
+/* === BOX PLOTS === */
+.boxplot-list { display: flex; flex-direction: column; gap: 20px; padding: 12px 0; }
+.boxplot-row { display: grid; grid-template-columns: 90px 1fr 100px; gap: 14px; align-items: center; }
+.boxplot-label { font-weight: 700; font-size: 13px; }
+.boxplot-track { position: relative; height: 36px; background: linear-gradient(to right, #fde8e8 0%, #fef3c7 50%, #d1fae5 100%); border-radius: 6px; border: 1px solid #e0e0e0; }
+.boxplot-scale { position: absolute; left: 0; right: 0; bottom: -16px; display: flex; justify-content: space-between; font-size: 10px; color: #999; padding: 0 2px; }
+.boxplot-line { position: absolute; top: 50%; transform: translateY(-50%); height: 2px; background: #667eea; }
+.boxplot-box { position: absolute; top: 6px; bottom: 6px; border-radius: 3px; opacity: 0.9; border: 1px solid rgba(0,0,0,0.15); }
+.boxplot-median { position: absolute; top: 3px; bottom: 3px; width: 3px; background: #000; transform: translateX(-50%); }
+.boxplot-min, .boxplot-max { position: absolute; top: 25%; height: 50%; width: 2px; background: #667eea; transform: translateX(-50%); }
+.boxplot-mean { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; background: #e91e63; border: 2px solid white; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px #e91e63; }
+.boxplot-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 14px; }
+
+/* === CALENDAR HEATMAP === */
+.calheatmap-wrap { padding: 16px 0; }
+.calheatmap-grid { display: flex; gap: 4px; justify-content: flex-start; overflow-x: auto; padding: 8px 0; }
+.calheatmap-week { display: flex; flex-direction: column; gap: 4px; }
+.calheatmap-day, .calheatmap-day-empty { width: 18px; height: 18px; border-radius: 3px; cursor: default; transition: transform .1s; }
+.calheatmap-day:hover { transform: scale(1.4); z-index: 5; position: relative; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.calheatmap-day-empty { visibility: hidden; }
+.calheatmap-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 12px; font-size: 11px; color: #666; }
+.calheatmap-leg { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+.calheatmap-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 20px; }
+.calheatmap-stat { background: linear-gradient(135deg, #f5f5f5, #e8e8e8); padding: 16px; border-radius: 10px; text-align: center; }
+.calheatmap-stat .number { font-size: 28px; font-weight: 800; color: #216e39; }
+.calheatmap-stat .label { font-size: 12px; color: #666; margin-top: 4px; }
+
+/* === PRESENTATION MODE === */
+.presentation-overlay {
+    position: fixed; inset: 0; z-index: 99999;
+    background: radial-gradient(ellipse at center, #1a1f3a 0%, #0a0f1f 100%);
+    color: white;
+    display: flex; flex-direction: column;
+    padding: 24px 36px;
+    animation: presentationFadeIn .4s ease;
+    overflow: auto;
+}
+@keyframes presentationFadeIn {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.presentation-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+.presentation-title { text-align: left; }
+.presentation-school { font-size: 14px; color: #9eb1d6; letter-spacing: 1px; }
+.presentation-exam { font-size: 28px; font-weight: 800; margin-top: 4px; background: linear-gradient(90deg, #fff, #c2d4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.presentation-year { font-size: 13px; color: #7a8aab; margin-top: 4px; }
+.presentation-close { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #ff6b6b; font-size: 22px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; }
+.presentation-close:hover { background: rgba(239,68,68,0.3); transform: rotate(90deg); }
+
+.presentation-counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 28px; }
+.presentation-counter { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 22px 18px; text-align: center; backdrop-filter: blur(10px); }
+.presentation-counter-num { font-size: 56px; font-weight: 900; line-height: 1; }
+.presentation-counter-label { font-size: 13px; color: #c2d4ff; margin-top: 8px; letter-spacing: 1px; text-transform: uppercase; }
+.presentation-counter-green .presentation-counter-num { color: #10b981; text-shadow: 0 0 30px rgba(16,185,129,0.4); }
+.presentation-counter-blue .presentation-counter-num { color: #60a5fa; text-shadow: 0 0 30px rgba(96,165,250,0.4); }
+.presentation-counter-orange .presentation-counter-num { color: #fbbf24; text-shadow: 0 0 30px rgba(251,191,36,0.4); }
+.presentation-counter-red .presentation-counter-num { color: #f87171; text-shadow: 0 0 30px rgba(248,113,113,0.4); }
+
+.presentation-main { flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; min-height: 0; }
+.presentation-panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 28px; display: flex; flex-direction: column; }
+.presentation-panel h3 { margin: 0 0 16px; font-size: 18px; font-weight: 600; color: #c2d4ff; }
+.presentation-current { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 280px; }
+.presentation-current-info { color: #9eb1d6; font-size: 16px; }
+.presentation-card { text-align: center; padding: 32px; max-width: 500px; }
+.presentation-card-anim { animation: cardPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes cardPop {
+    from { opacity: 0; transform: scale(0.7) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.presentation-rang { font-size: 14px; color: #7a8aab; margin-bottom: 8px; letter-spacing: 1px; }
+.presentation-student-name { font-size: 38px; font-weight: 800; margin-bottom: 4px; }
+.presentation-student-num { font-size: 14px; color: #9eb1d6; margin-bottom: 24px; }
+.presentation-moy { font-size: 84px; font-weight: 900; line-height: 1; text-shadow: 0 0 40px currentColor; }
+.presentation-moy small { font-size: 32px; opacity: 0.7; }
+.presentation-decision { display: inline-block; margin-top: 18px; padding: 10px 24px; border-radius: 999px; font-weight: 700; font-size: 18px; color: white; }
+.presentation-progress { height: 6px; background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden; margin-top: 16px; }
+.presentation-progress-bar { height: 100%; background: linear-gradient(90deg, #60a5fa, #10b981); transition: width 0.4s ease; width: 0%; }
+.presentation-progress-text { font-size: 12px; color: #9eb1d6; text-align: right; margin-top: 6px; }
+
+.presentation-panel-chart { align-items: center; }
+.presentation-donut { width: 220px; height: 220px; border-radius: 50%; position: relative; margin: 20px auto; }
+.presentation-donut::after { content: ''; position: absolute; inset: 50px; background: #0a0f1f; border-radius: 50%; }
+.presentation-donut-legend { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.presentation-donut-legend div { display: flex; align-items: center; gap: 8px; }
+.presentation-donut-legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+
+.presentation-footer { display: flex; gap: 24px; justify-content: center; margin-top: 18px; font-size: 12px; color: #9eb1d6; }
+.presentation-footer kbd { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 2px 8px; font-family: monospace; font-size: 11px; color: #fff; }
+
+@media (max-width: 900px) {
+    .presentation-counters { grid-template-columns: repeat(2, 1fr); }
+    .presentation-main { grid-template-columns: 1fr; }
+    .presentation-counter-num { font-size: 42px; }
+    .presentation-moy { font-size: 60px; }
+}
+
