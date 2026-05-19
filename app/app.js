@@ -60,6 +60,11 @@ async function doLogin() {
     const oldErr = document.querySelector('.login-error');
     if (oldErr) oldErr.remove();
 
+    if (!LOGIN_ACCOUNTS || Object.keys(LOGIN_ACCOUNTS).length === 0) {
+        showLoginError('Configuration manquante : créez app/config.local.js à partir de config.local.example.js.');
+        return;
+    }
+
     const account = LOGIN_ACCOUNTS[role];
     if (!account) { showLoginError('Rôle invalide.'); return; }
     if (!user) { showLoginError('Veuillez entrer votre identifiant.'); return; }

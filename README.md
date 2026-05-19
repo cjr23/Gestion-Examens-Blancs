@@ -44,10 +44,18 @@ Aucune installation n'est requise.
    ```bash
    git clone https://github.com/cjr23/Gestion-Examens-Blancs.git
    ```
-2. Ouvrir `app/index.html` dans un navigateur moderne (Chrome ou Edge recommandés)
-3. Se connecter avec un compte valide
+2. **Créer le fichier de configuration locale** :
+   - Copier `app/config.local.example.js` vers `app/config.local.js`
+   - Générer un hash SHA-256 pour chaque mot de passe (méthodes documentées dans le template)
+   - Remplacer les `REMPLACER_PAR_HASH_SHA256` par les hashes générés
+3. Ouvrir `app/index.html` dans un navigateur moderne (Chrome ou Edge recommandés)
+4. Se connecter avec un compte valide
 
-> **Important** : les identifiants par défaut sont définis dans `app/app.js` (constante `LOGIN_ACCOUNTS`). Pensez à les modifier avant tout déploiement réel.
+> **Note** : `app/config.local.js` est exclu de git via `.gitignore` — il reste local à votre machine. Sans ce fichier, l'app affiche un message d'erreur au login.
+
+### Changer son mot de passe
+
+Une fois connecté, cliquez sur **"Changer mon MdP"** dans la barre latérale. Le nouveau hash est stocké dans `localStorage` du navigateur et prend le pas sur celui de `config.local.js`. Vider le cache du navigateur restaure le mot de passe d'origine.
 
 ---
 
@@ -93,7 +101,10 @@ Tableau de Bord, Élèves, 1er Tour — Notes, Résultats 1er Tour, 2ème Tour �
 
 ## Sécurité
 
-Toutes les données sont stockées **localement dans le navigateur** — rien n'est envoyé à un serveur. Les identifiants de connexion étant présents dans le code source côté client, ils sont visibles par toute personne ouvrant les outils de développement. **Modifiez les mots de passe par défaut** dans `app/app.js` avant tout usage réel, et envisagez une solution serveur si une véritable sécurité d'authentification est requise.
+- Toutes les données sont stockées **localement dans le navigateur** (sessionStorage et localStorage) — rien n'est envoyé à un serveur.
+- Les mots de passe sont stockés sous forme de **hashes SHA-256** dans `app/config.local.js` (non versionné). Les mots de passe en clair n'apparaissent jamais dans le code ni dans l'historique git.
+- L'authentification reste **côté client** : un utilisateur déterminé peut contourner le contrôle via les outils de développement du navigateur. Pour une vraie sécurité (administration multi-utilisateurs, données sensibles), une solution serveur est nécessaire.
+- SHA-256 sans salt est vulnérable aux attaques par dictionnaire si les hashes fuitent. Utilisez des mots de passe longs et aléatoires.
 
 ---
 
