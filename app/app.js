@@ -1,3 +1,135 @@
+// ========== SECURITY MODULE ==========
+// Couche défensive contre XSS, injection SQL (pour les données exportées),
+// caractères de contrôle, et double-clic sur les boutons.
+// Toutes les saisies utilisateur passent par ce module avant stockage.
+const Security = (function() {
+    const HTML_ENTITIES = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '`':'&#96;' };
+
+    const XSS_PATTERNS = [
+        /<\s*script\b/i, /<\s*iframe\b/i, /<\s*object\b/i, /<\s*embed\b/i,
+        /<\s*link\b/i, /<\s*meta\b/i, /<\s*style\b/i, /<\s*svg\b[^>]*\bon\w+/i,
+        /\bjavascript\s*:/i, /\bvbscript\s*:/i, /\bdata\s*:\s*text\/html/i,
+        /\bon(click|error|load|mouseover|focus|blur|submit|change|keydown|keyup|keypress)\s*=/i,
+        /\bformaction\s*=/i, /\bsrcdoc\s*=/i, /expression\s*\(/i
+    ];
+
+    const SQL_PATTERNS = [
+        /\b(union\s+select|select\s+.+\s+from|insert\s+into|update\s+\w+\s+set|delete\s+from|drop\s+(table|database)|truncate\s+table|alter\s+table|create\s+table|exec(ute)?\s*\()/i,
+        /(--\s|\/\*|\*\/)/, /'\s*or\s*'1'\s*=\s*'1/i, /\bor\s+1\s*=\s*1\b/i,
+        /'\s*;\s*(drop|delete|update|insert)/i, /\bxp_cmdshell\b/i,
+        /\bsleep\s*\(\s*\d+\s*\)/i, /\bbenchmark\s*\(/i, /\bload_file\s*\(/i
+    ];
+
+    function escapeHTML(str) {
+        if (str == null) return '';
+        return String(str).replace(/[&<>"'`]/g, ch => HTML_ENTITIES[ch]);
+    }
+
+    function detectXSS(str) {
+        if (!str) return false;
+        const s = String(str);
+        return XSS_PATTERNS.some(rx => rx.test(s));
+    }
+
+    function detectSQLi(str) {
+        if (!str) return false;
+        const s = String(str);
+        return SQL_PATTERNS.some(rx => rx.test(s));
+    }
+
+    function isMalicious(str) {
+        return detectXSS(str) || detectSQLi(str);
+    }
+
+    function sanitizeInput(str, opts) {
+        if (str == null) return '';
+        opts = opts || {};
+        let s = String(str);
+        s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+        s = s.replace(/<[^>]*>/g, '');
+        s = s.replace(/^\s*(javascript|vbscript|data)\s*:/gi, '');
+        s = s.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
+        if (opts.trim !== false) s = s.trim();
+        const max = opts.maxLength || 200;
+        if (s.length > max) s = s.substring(0, max);
+        return s;
+    }
+
+    function validateName(str, opts) {
+        opts = opts || {};
+        const field = opts.field || 'Le nom';
+        if (!str) return { ok: false, error: `${field} est requis.` };
+        const s = sanitizeInput(str, { maxLength: 80 });
+        if (s.length < 1) return { ok: false, error: `${field} est vide après nettoyage.` };
+        if (s.length > 80) return { ok: false, error: `${field} est trop long (max 80 caractères).` };
+        if (isMalicious(s)) return { ok: false, error: `${field} contient des caractères interdits (XSS/SQLi).` };
+        if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-.]+$/.test(s)) {
+            return { ok: false, error: `${field} ne doit contenir que des lettres, espaces, apostrophes, tirets ou points.` };
+        }
+        return { ok: true, value: s };
+    }
+
+    function validateNumber(val, opts) {
+        opts = opts || {};
+        const field = opts.field || 'Le nombre';
+        const n = parseInt(val, 10);
+        if (isNaN(n)) return { ok: false, error: `${field} doit être un nombre.` };
+        if (opts.min !== undefined && n < opts.min) return { ok: false, error: `${field} doit être ≥ ${opts.min}.` };
+        if (opts.max !== undefined && n > opts.max) return { ok: false, error: `${field} doit être ≤ ${opts.max}.` };
+        return { ok: true, value: n };
+    }
+
+    function validateText(str, opts) {
+        opts = opts || {};
+        const field = opts.field || 'Le texte';
+        if (!str) return { ok: true, value: '' };
+        if (isMalicious(str)) return { ok: false, error: `${field} contient des éléments interdits (XSS/SQLi).` };
+        const s = sanitizeInput(str, { maxLength: opts.maxLength || 200 });
+        if (isMalicious(s)) return { ok: false, error: `${field} contient des éléments interdits.` };
+        return { ok: true, value: s };
+    }
+
+    function protectButton(btn, ms) {
+        if (!btn || btn._secProtected) return;
+        btn._secProtected = true;
+        const lockMs = ms || 700;
+        btn.addEventListener('click', function(e) {
+            if (btn._secLocked) { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+            btn._secLocked = true;
+            btn.classList.add('btn-locked');
+            setTimeout(() => { btn._secLocked = false; btn.classList.remove('btn-locked'); }, lockMs);
+        }, true);
+    }
+
+    function installInputShield() {
+        document.addEventListener('input', function(e) {
+            const t = e.target;
+            if (!t || (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA')) return;
+            if (t.type === 'password' || t.type === 'hidden' || t.type === 'file') return;
+            const v = t.value;
+            if (!v) { t.classList.remove('input-warn'); t.title = ''; return; }
+            if (isMalicious(v)) {
+                t.classList.add('input-warn');
+                t.title = 'Caractères suspects détectés (XSS/SQL). Ils seront filtrés à la sauvegarde.';
+            } else {
+                t.classList.remove('input-warn');
+                if (t.title && t.title.startsWith('Caractères suspects')) t.title = '';
+            }
+        }, true);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('button.btn-primary, button.btn-success, button.btn-danger').forEach(btn => protectButton(btn));
+        });
+    }
+
+    return {
+        escapeHTML, sanitizeInput, detectXSS, detectSQLi, isMalicious,
+        validateName, validateNumber, validateText, protectButton, installInputShield
+    };
+})();
+
+Security.installInputShield();
+
 // ========== LOGIN SYSTEM ==========
 // LOGIN_ACCOUNTS (depuis config.local.js) fournit les hashes par défaut.
 // Les hashes personnalisés par l'utilisateur sont stockés dans localStorage.
@@ -549,8 +681,8 @@ function renderStudentsTable() {
         const tr = document.createElement('tr');
         const isInapte = s.inapteEPS || false;
         const sexeTag = s.sexe === 'F' ? '<span class="sexe-tag sexe-f">F</span>' : '<span class="sexe-tag sexe-m">M</span>';
-        tr.innerHTML = `<td>${s.numTable}</td><td><span class="ano-tag">${s.anonymat || '-'}</span></td>
-            <td style="text-align:left;">${s.prenom}</td><td style="text-align:left;">${s.nom}</td>
+        tr.innerHTML = `<td>${Security.escapeHTML(s.numTable)}</td><td><span class="ano-tag">${Security.escapeHTML(s.anonymat || '-')}</span></td>
+            <td style="text-align:left;">${Security.escapeHTML(s.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(s.nom)}</td>
             <td>${sexeTag}</td>
             <td class="no-print"><label class="inapte-toggle"><input type="checkbox" ${isInapte ? 'checked' : ''} onchange="toggleInapteEPS(${i}, this.checked)"><span class="inapte-label">${isInapte ? 'Oui' : 'Non'}</span></label></td>
             <td class="no-print"><button class="btn btn-primary btn-sm" onclick="editStudent(${i})">Modifier</button>
@@ -633,10 +765,15 @@ function editStudent(idx) {
 function saveStudent() {
     const ld = getLevelData();
     const idx = parseInt(document.getElementById('editStudentIdx').value);
-    const numTable = parseInt(document.getElementById('studentNumTable').value);
-    const prenom = document.getElementById('studentPrenom').value.trim();
-    const nom = document.getElementById('studentNom').value.trim().toUpperCase();
-    if (!prenom || !nom) { toast('Veuillez remplir tous les champs.', 'error'); return; }
+    const numCheck = Security.validateNumber(document.getElementById('studentNumTable').value, { min: 1, max: 9999, field: 'Le numéro de table' });
+    if (!numCheck.ok) { toast(numCheck.error, 'error'); return; }
+    const numTable = numCheck.value;
+    const prenomCheck = Security.validateName(document.getElementById('studentPrenom').value, { field: 'Le prénom' });
+    if (!prenomCheck.ok) { toast(prenomCheck.error, 'error', 5000); return; }
+    const nomCheck = Security.validateName(document.getElementById('studentNom').value, { field: 'Le nom' });
+    if (!nomCheck.ok) { toast(nomCheck.error, 'error', 5000); return; }
+    const prenom = prenomCheck.value;
+    const nom = nomCheck.value.toUpperCase();
     const duplicate = ld.students.findIndex((s, i) => s.numTable === numTable && i !== idx);
     if (duplicate !== -1) { toast(`Le numéro de table ${numTable} est déjà attribué à ${ld.students[duplicate].prenom} ${ld.students[duplicate].nom}.`, 'warning', 5000); return; }
     if (idx === -1) {
@@ -728,11 +865,29 @@ function processCsvImport() {
     let sep = document.getElementById('csvSep').value;
     if (sep === '\\t') sep = '\t';
     if (!data) { toast('Aucune donnée.', 'error'); return; }
-    let count = 0;
+    let count = 0, rejected = 0;
     data.split('\n').forEach(line => {
         const p = line.trim().split(sep);
-        if (p.length >= 3) { ld.students.push({ numTable: parseInt(p[0]) || (ld.students.length + 1), prenom: p[1].trim(), nom: p[2].trim().toUpperCase(), anonymat: '' }); count++; }
-        else if (p.length === 2) { ld.students.push({ numTable: ld.students.length + 1, prenom: p[0].trim(), nom: p[1].trim().toUpperCase(), anonymat: '' }); count++; }
+        let numTable, rawPrenom, rawNom;
+        if (p.length >= 3) {
+            numTable = parseInt(p[0]) || (ld.students.length + 1);
+            rawPrenom = p[1]; rawNom = p[2];
+        } else if (p.length === 2) {
+            numTable = ld.students.length + 1;
+            rawPrenom = p[0]; rawNom = p[1];
+        } else {
+            return;
+        }
+        const prenomCheck = Security.validateName(rawPrenom, { field: 'Prénom' });
+        const nomCheck = Security.validateName(rawNom, { field: 'Nom' });
+        if (!prenomCheck.ok || !nomCheck.ok) { rejected++; return; }
+        ld.students.push({
+            numTable: numTable,
+            prenom: prenomCheck.value,
+            nom: nomCheck.value.toUpperCase(),
+            anonymat: ''
+        });
+        count++;
     });
     sortStudentsAlpha(ld);
     studentViewOrder = null;
@@ -740,8 +895,11 @@ function processCsvImport() {
     renderStudentsTable();
     updateLevelTags();
     saveData();
-    toast(`${count} élève(s) importé(s) dans ${LEVELS[currentLevel].shortLabel} !`, 'success');
-    logActivity(`${count} élèves importés par CSV (${LEVELS[currentLevel].shortLabel})`, 'import');
+    const msg = rejected > 0
+        ? `${count} élève(s) importé(s) — ${rejected} ligne(s) rejetée(s) (caractères invalides).`
+        : `${count} élève(s) importé(s) dans ${LEVELS[currentLevel].shortLabel} !`;
+    toast(msg, rejected > 0 ? 'warning' : 'success', 5000);
+    logActivity(`${count} élèves importés par CSV (${LEVELS[currentLevel].shortLabel})${rejected ? ', ' + rejected + ' rejetés' : ''}`, 'import');
 }
 
 // ========== EXCEL IMPORT ==========
@@ -1498,12 +1656,22 @@ function renderConfigPage() {
 }
 
 function saveSchoolInfo() {
-    appData.school.name = document.getElementById('schoolName').value;
-    appData.school.ia = document.getElementById('iaName').value;
-    appData.school.ief = document.getElementById('iefName').value;
-    appData.school.dates = document.getElementById('examDates').value;
-    appData.school.principal = document.getElementById('principalName').value;
-    appData.school.prefet = document.getElementById('prefetName').value;
+    const fields = [
+        { id: 'schoolName',    key: 'name',      label: "Nom de l'établissement", max: 120 },
+        { id: 'iaName',        key: 'ia',        label: "IA",        max: 80 },
+        { id: 'iefName',       key: 'ief',       label: "IEF",       max: 80 },
+        { id: 'examDates',     key: 'dates',     label: "Dates",     max: 80 },
+        { id: 'principalName', key: 'principal', label: "Directeur", max: 80 },
+        { id: 'prefetName',    key: 'prefet',    label: "Préfet",    max: 80 }
+    ];
+    const cleaned = {};
+    for (const f of fields) {
+        const raw = document.getElementById(f.id).value;
+        const r = Security.validateText(raw, { maxLength: f.max, field: f.label });
+        if (!r.ok) { toast(r.error, 'error', 5000); return; }
+        cleaned[f.key] = r.value;
+    }
+    Object.assign(appData.school, cleaned);
     saveData();
     toast('Informations de l\'établissement sauvegardées.', 'success');
 }
@@ -2414,10 +2582,10 @@ function previewPasteGrades() {
         const row = p.dataRows[i];
         const st = p.hasNames ? findStudentByToken(p.students, row[0]) : p.students[i];
         if (st) matched++;
-        html += `<tr><td style="border:1px solid var(--border-color); padding:4px 8px;">${st ? (st.prenom + ' ' + st.nom) : '<em style="color:#ef4444;">Non trouvé</em>'}</td>`;
+        html += `<tr><td style="border:1px solid var(--border-color); padding:4px 8px;">${st ? Security.escapeHTML(st.prenom + ' ' + st.nom) : '<em style="color:#ef4444;">Non trouvé</em>'}</td>`;
         p.mapping.forEach((colIdx, si) => {
             const v = row[colIdx + p.nameOffset] || '';
-            html += `<td style="border:1px solid var(--border-color); padding:4px 8px;">${v}</td>`;
+            html += `<td style="border:1px solid var(--border-color); padding:4px 8px;">${Security.escapeHTML(v)}</td>`;
         });
         html += '</tr>';
     }
@@ -2518,11 +2686,11 @@ function renderRiskSectionHTML(ld, cfg) {
         const color = r.moyenne < 7 ? '#ef4444' : r.moyenne < 9 ? '#f59e0b' : '#eab308';
         html += `<tr>
             <td>${i + 1}</td>
-            <td style="text-align:left;">${r.student.prenom}</td>
-            <td style="text-align:left;">${r.student.nom}</td>
+            <td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td>
+            <td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td>
             <td style="font-weight:700; color:${color};">${r.moyenne.toFixed(2)}</td>
             <td><b>${r.lowCount}</b> / ${r.noteCount}</td>
-            <td style="text-align:left; font-size:0.85em;">${r.reasons.join(' ; ')}</td>
+            <td style="text-align:left; font-size:0.85em;">${Security.escapeHTML(r.reasons.join(' ; '))}</td>
         </tr>`;
     });
     if (risk.length > 20) html += `<tr><td colspan="6" style="text-align:center; color:var(--text-secondary);">... ${risk.length - 20} autre(s)</td></tr>`;

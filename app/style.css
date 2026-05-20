@@ -479,6 +479,18 @@ textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 
     display: inline-flex; align-items: center; gap: 6px; letter-spacing: 0.01em;
 }
 .btn:active { transform: scale(0.97); }
+/* Sécurité : bouton verrouillé brièvement après un clic (anti double-clic) */
+.btn-locked { pointer-events: none; opacity: 0.65; cursor: wait !important; filter: saturate(0.6); }
+/* Sécurité : input avec caractères suspects (XSS / injection détectée) */
+.input-warn, input.input-warn, textarea.input-warn {
+    border-color: #f59e0b !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15) !important;
+}
+.input-warn:focus, input.input-warn:focus, textarea.input-warn:focus {
+    outline-color: #f59e0b !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25) !important;
+}
 .btn-primary { background: #3E2415; color: white; box-shadow: 0 1px 3px rgba(62,36,21,0.3); }
 .btn-primary:hover { background: #2a1a0e; box-shadow: 0 3px 8px rgba(62,36,21,0.4); transform: translateY(-1px); }
 .btn-success { background: #10b981; color: white; box-shadow: 0 1px 3px rgba(16,185,129,0.3); }

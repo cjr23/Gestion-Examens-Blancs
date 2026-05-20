@@ -106,6 +106,15 @@ Tableau de Bord, Élèves, 1er Tour — Notes, Résultats 1er Tour, 2ème Tour �
 - L'authentification reste **côté client** : un utilisateur déterminé peut contourner le contrôle via les outils de développement du navigateur. Pour une vraie sécurité (administration multi-utilisateurs, données sensibles), une solution serveur est nécessaire.
 - SHA-256 sans salt est vulnérable aux attaques par dictionnaire si les hashes fuitent. Utilisez des mots de passe longs et aléatoires.
 
+### Module `Security` (protection des entrées)
+
+Un module défensif (`Security`, en haut de `app/app.js`) protège contre les **injections XSS et SQL** ainsi que les **doubles-clics** :
+
+- **Validation à la saisie** : ajout/modification d'élèves, import CSV, et informations de l'établissement passent par `Security.validateName` / `validateText` / `validateNumber`. Les balises HTML, handlers JavaScript (`onerror=`, `onclick=`…), URLs `javascript:` et patterns SQL (`UNION SELECT`, `OR 1=1`, `--`…) sont rejetés.
+- **Échappement à l'affichage** : les noms d'élèves sont passés par `Security.escapeHTML()` dans les tableaux rendus en `innerHTML` (défense en profondeur pour d'éventuelles données pré-existantes).
+- **Bouclier global** : tous les `<input>` et `<textarea>` (hors mots de passe) sont surveillés en temps réel ; un champ contenant un pattern suspect est marqué visuellement en orange.
+- **Anti double-clic** : les boutons `.btn-primary`, `.btn-success` et `.btn-danger` sont verrouillés ~700 ms après chaque clic pour éviter les soumissions multiples involontaires.
+
 ---
 
 ## Compatibilité
