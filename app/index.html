@@ -227,7 +227,7 @@
     <div class="header-right">
         <div class="global-search-wrap">
             <svg class="global-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
-            <input type="text" id="globalSearch" placeholder="Recherche globale..." oninput="performGlobalSearch(this.value)">
+            <input type="text" id="globalSearch" placeholder="Recherche globale..." oninput="onGlobalSearchInput(this.value)">
             <div class="global-search-results" id="globalSearchResults"></div>
         </div>
         <div class="header-clock" id="headerClock" title="Horloge">
@@ -280,7 +280,7 @@
             </div>
             <div class="search-bar no-print">
                 <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
-                <input type="text" id="studentSearch" placeholder="Rechercher un élève..." oninput="renderStudentsTable()">
+                <input type="text" id="studentSearch" placeholder="Rechercher un élève..." oninput="onStudentSearchInput()">
             </div>
             <div class="alert alert-info">Total: <strong id="studentCount">0</strong> élève(s) dans ce niveau</div>
             <div class="table-wrapper">

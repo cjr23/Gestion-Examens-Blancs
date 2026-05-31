@@ -102,10 +102,10 @@
 /* Dark Buttons */
 [data-theme="dark"] .btn-primary { background: linear-gradient(135deg, #c4b48a 0%, #B8A67A 100%); color: #1a0e06 !important; font-weight: 700; }
 [data-theme="dark"] .btn-primary:hover { background: linear-gradient(135deg, #d4c49a 0%, #c4b48a 100%); box-shadow: 0 4px 14px rgba(184,166,122,0.45); }
-[data-theme="dark"] .btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff !important; }
-[data-theme="dark"] .btn-success:hover { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); box-shadow: 0 4px 14px rgba(16,185,129,0.45); }
-[data-theme="dark"] .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #ffffff !important; }
-[data-theme="dark"] .btn-danger:hover { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); box-shadow: 0 4px 14px rgba(239,68,68,0.45); }
+[data-theme="dark"] .btn-success { background: linear-gradient(135deg, #047857 0%, #036b4f 100%); color: #ffffff !important; }
+[data-theme="dark"] .btn-success:hover { background: linear-gradient(135deg, #059669 0%, #047857 100%); box-shadow: 0 4px 14px rgba(4,120,87,0.5); }
+[data-theme="dark"] .btn-danger { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff !important; }
+[data-theme="dark"] .btn-danger:hover { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 14px rgba(220,38,38,0.5); }
 [data-theme="dark"] .btn-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #1a0e06 !important; border: none; font-weight: 700; }
 [data-theme="dark"] .btn-warning:hover { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); box-shadow: 0 4px 14px rgba(245,158,11,0.45); }
 [data-theme="dark"] .btn-info { background: linear-gradient(135deg, #c4b48a 0%, #9a8a60 100%); color: #1a0e06 !important; font-weight: 700; }
@@ -533,7 +533,7 @@ td input[type="number"].grade-inapte::placeholder { color: #92400e; font-weight:
 .inapte-cb input[type="checkbox"]:checked + span { color: #f59e0b; }
 [data-theme="dark"] .inapte-cb { color: #fbbf24; }
 .sexe-toggle { display: flex; gap: 8px; }
-.btn-sexe { padding: 8px 20px; border: 2px solid var(--border-color); border-radius: 8px; background: var(--card-bg); cursor: pointer; font-weight: 600; font-size: 0.9em; transition: all 0.2s; }
+.btn-sexe { padding: 8px 20px; border: 2px solid var(--border-color); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); cursor: pointer; font-weight: 600; font-size: 0.9em; transition: all 0.2s; }
 .btn-sexe.active[data-sexe="M"] { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
 .btn-sexe.active[data-sexe="F"] { background: #fce7f3; border-color: #ec4899; color: #9d174d; }
 [data-theme="dark"] .btn-sexe.active[data-sexe="M"] { background: rgba(59,130,246,0.2); color: #93c5fd; }
@@ -1324,6 +1324,21 @@ td input[type="number"]:focus {
     th, td { border: 1px solid #ccc; }
     th { background: #333 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .admis, .deuxieme-tour, .ajourne { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* Imprimer toujours en clair, même si le mode sombre est actif :
+       sinon le texte clair des règles [data-theme="dark"] reste illisible sur blanc. */
+    html[data-theme="dark"] {
+        --bg-body: #fff; --bg-card: #fff; --bg-nav: #fff;
+        --text-primary: #000; --text-secondary: #333; --border-color: #999;
+        --gray-400: #777; --gray-500: #555; --gray-600: #333; --gray-700: #222;
+    }
+    html[data-theme="dark"] #printModalContent,
+    html[data-theme="dark"] #printModalContent * { color: #000 !important; }
+    html[data-theme="dark"] #printModalContent th { background: #333 !important; color: #fff !important; }
+    html[data-theme="dark"] #printModalContent td,
+    html[data-theme="dark"] #printModalContent tr:nth-child(even) td { background: #fff !important; }
+    html[data-theme="dark"] #printModalContent .card,
+    html[data-theme="dark"] #printModalContent .table-wrapper { background: #fff !important; }
 }
 
 /* ================================================================
@@ -2047,10 +2062,10 @@ td input[type="number"]:focus {
     background: linear-gradient(135deg, var(--primary) 0%, #54341f 100%);
 }
 .btn-success {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, #047857 0%, #036b4f 100%);
 }
 .btn-danger {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 }
 .btn-warning {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
@@ -2128,6 +2143,14 @@ th {
     --gray-100: #1c1916;
     --gray-200: #383228;
     --gray-300: #4a4238;
+    /* Gris intermédiaires inversés pour le mode sombre : indispensables car de
+       nombreux textes secondaires (Statistiques, visualisations) utilisent
+       var(--gray-500/600/700). Sans ces valeurs, ils restaient brun foncé sur
+       fond sombre, donc illisibles. Rampe croissante = de plus en plus clair. */
+    --gray-400: #a89580;
+    --gray-500: #bcac94;
+    --gray-600: #ccbda6;
+    --gray-700: #dcd0bd;
     --sidebar-bg: linear-gradient(180deg, #0f0d0b 0%, #14110e 100%);
 }
 
@@ -2331,6 +2354,25 @@ th {
 [data-theme="dark"] ::-webkit-scrollbar-track { background: #121110; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #383228; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #3d3832; }
+
+/* ---- Statistiques / widgets : textes qui utilisaient var(--primary) ----
+   --primary (#3E2415, brun foncé) sert de couleur de TEXTE à plusieurs endroits
+   des stats : lisible sur fond clair, illisible sur fond sombre. On le remplace
+   ici par les teintes claires de la charte (crème pour les titres, or pour les
+   valeurs mises en avant). Spécificité +1 → ces règles l'emportent sans !important. */
+[data-theme="dark"] .stats-section-title,
+[data-theme="dark"] .stats-split h3 { color: #f0e8dc; }
+[data-theme="dark"] .recap-val,
+[data-theme="dark"] .mini-kpi .kpi .v,
+[data-theme="dark"] .sim-slider-row .sim-val { color: var(--accent); }
+[data-theme="dark"] .gauge-text { fill: var(--accent); }
+
+/* Lignes du tableau récapitulatif : les fonds clairs (--success-light /
+   --warning-light) ne sont pas re-thémés et rendaient le texte clair illisible.
+   On passe à des teintes translucides sombres, comme les badges de statut. */
+[data-theme="dark"] .recap-table .recap-admis { background: rgba(16,185,129,0.12); }
+[data-theme="dark"] .recap-table .recap-tour2 { background: rgba(245,158,11,0.12); }
+[data-theme="dark"] .recap-table .recap-ajourne { background: rgba(16,185,129,0.12); }
 
 /* ================================================================
    ===== LIGHT MODE v2 — Neutral crisp base, brown accent ========

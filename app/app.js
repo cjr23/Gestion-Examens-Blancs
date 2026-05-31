@@ -419,6 +419,7 @@ function initTcDotMap() {
     resize(); window.addEventListener('resize', resize); draw();
 }
 
+let _clockDateKey = '';
 function updateHeaderClock() {
     const timeEl = document.getElementById('clockTime');
     const dateEl = document.getElementById('clockDate');
@@ -426,10 +427,16 @@ function updateHeaderClock() {
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     timeEl.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    try {
-        dateEl.textContent = now.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-    } catch (e) {
-        dateEl.textContent = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+    // La date ne change qu'une fois par jour : on évite de recalculer
+    // toLocaleDateString à chaque seconde (texte identique, juste mémoïsé).
+    const dateKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+    if (dateKey !== _clockDateKey) {
+        _clockDateKey = dateKey;
+        try {
+            dateEl.textContent = now.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        } catch (e) {
+            dateEl.textContent = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+        }
     }
 }
 
@@ -2273,6 +2280,23 @@ function performGlobalSearch(query) {
     results.style.display = 'block';
 }
 
+// ========== DEBOUNCE (champs de recherche) ==========
+// Évite de re-rendre la liste / re-balayer toutes les classes à chaque frappe.
+// Le résultat est identique, seul le déclenchement est différé (~150 ms).
+function debounce(fn, ms) {
+    let t;
+    return function(...args) {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(this, args), ms);
+    };
+}
+// Déclarées en `function` (et non `const`) pour rester accessibles depuis les
+// attributs oninput="" du HTML, qui ne voient pas les liaisons lexicales globales.
+const _debouncedStudentSearch = debounce(renderStudentsTable, 150);
+function onStudentSearchInput() { _debouncedStudentSearch(); }
+const _debouncedGlobalSearch = debounce(performGlobalSearch, 150);
+function onGlobalSearchInput(q) { _debouncedGlobalSearch(q); }
+
 function goToStudent(level, numTable) {
     document.getElementById('globalSearch').value = '';
     document.getElementById('globalSearchResults').style.display = 'none';
@@ -2500,20 +2524,30 @@ function exportPrintModalToPDF() {
         .replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
     const filename = `${title}_${appData.year}.pdf`;
     toast('Génération du PDF en cours...', 'info', 2000);
+    // Le document doit toujours être capturé en thème clair (texte foncé sur fond
+    // blanc), même si l'utilisateur est en mode sombre : html2pdf force le fond
+    // blanc mais pas la couleur du texte, ce qui rendrait le PDF délavé en sombre.
+    const html = document.documentElement;
+    const prevTheme = html.getAttribute('data-theme');
+    html.setAttribute('data-theme', 'light');
     const opt = {
         margin:       [10, 10, 10, 10],
         filename:     filename,
-        image:        { type: 'jpeg', quality: 0.95 },
+        image:        { type: 'png' },
         html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak:    { mode: ['css', 'legacy'], before: '.bulletin-page' }
+    };
+    const restoreTheme = () => {
+        if (prevTheme === null) html.removeAttribute('data-theme');
+        else html.setAttribute('data-theme', prevTheme);
     };
     html2pdf().set(opt).from(content).save().then(() => {
         toast('PDF exporté !', 'success');
         logActivity('Export PDF : ' + title, 'export');
     }).catch(err => {
         toast('Erreur PDF : ' + err.message, 'error', 5000);
-    });
+    }).finally(restoreTheme);
 }
 
 // ========== PASTE GRADES FROM EXCEL ==========
@@ -3255,7 +3289,10 @@ printDocument = function(type) {
             labels.push(sub.name + ' (c' + sub.coef + ')');
             data.push(cnt > 0 ? Math.round((sum / cnt) * 100) / 100 : 0);
         });
-        new Chart(cv, {
+        // Enregistré dans _chartInstances et détruit avant recréation, sinon
+        // chaque re-rendu de la page Statistiques fuyait une instance Chart.js.
+        destroyChart('radarSubjects');
+        _chartInstances['radarSubjects'] = new Chart(cv, {
             type: 'radar',
             data: {
                 labels,
