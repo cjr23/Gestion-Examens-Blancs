@@ -3431,9 +3431,10 @@ printDocument = function(type) {
 
 /* ===== AI VOICE CHAT ===== */
 (function(){
-    const state = { mode: 'idle', duration: 0, timer: null, waveTimer: null, recognition: null, lastTranscript: '' };
+    const state = { mode: 'idle', duration: 0, timer: null, waveTimer: null, recognition: null, lastTranscript: '', voice: null };
     const LS_KEY = 'aichat_claude_api_key';
-    const MODEL = 'claude-haiku-4-5-20251001';
+    const LS_VOICE = 'aichat_voice_name';
+    const MODEL = 'claude-opus-4-8';
 
     function $(id){ return document.getElementById(id); }
     function stage(){ return document.querySelector('#page-aichat .aichat-stage'); }
@@ -3556,6 +3557,8 @@ printDocument = function(type) {
         const context = buildContext();
         const system = `Tu es l'assistant vocal du Collège Jean XXIII (Tambacounda, Sénégal), plateforme de gestion des examens blancs (BFEM, Bac TS, Bac L2).
 Tu réponds en français, de façon concise (2-3 phrases max pour la voix), en te basant UNIQUEMENT sur les données JSON fournies.
+IMPORTANT : ta réponse est lue à voix haute. Écris en texte simple, SANS Markdown ni mise en forme — pas d'astérisques (*), de dièses (#), de tirets de liste, de back-ticks ni d'emojis. Énonce les notes naturellement (« 12 sur 20 » plutôt que « 12/20 ») et écris les symboles en toutes lettres (« pour cent », « supérieur à »).
+Tu peux raisonner et calculer à partir de ces données : moyennes, classements, taux de réussite, comparaisons entre élèves, matières ou niveaux.
 Si l'information n'est pas dans les données, dis-le clairement.
 Format des notes : /20. Les moyennes sont sur 20. Le statut peut être "admis", "tour2", "ajourné".
 
@@ -3589,22 +3592,119 @@ ${context}`;
         }
     }
 
+    function pickVoice(){
+        if (!window.speechSynthesis) return null;
+        const voices = window.speechSynthesis.getVoices() || [];
+        if (!voices.length) return state.voice; // voix pas encore chargées : on garde l'existante
+        // 1) Choix explicite enregistré par l'utilisateur (menu déroulant)
+        const saved = localStorage.getItem(LS_VOICE);
+        if (saved){
+            const found = voices.find(v => v.name === saved);
+            if (found){ state.voice = found; return state.voice; }
+        }
+        // 2) Sinon : voix d'homme française par défaut
+        const fr = voices.filter(v => /^fr/i.test(v.lang));
+        if (!fr.length) return state.voice;
+        // Voix masculines françaises connues (Windows : Paul ; macOS/iOS : Thomas, Nicolas ; etc.)
+        const male = /(paul|thomas|nicolas|claude|henri|daniel|mathieu|guillaume|pierre|antoine|male|homme|man)/i;
+        // Voix féminines à éviter dans le repli
+        const female = /(hortense|julie|caroline|am[ée]lie|audrey|aur[ée]lie|marie|virginie|sandrine|female|femme|woman)/i;
+        state.voice = fr.find(v => male.test(v.name))
+                   || fr.find(v => !female.test(v.name))
+                   || fr[0];
+        return state.voice;
+    }
+
+    // Nom court d'une voix : "Microsoft Paul - French (France)" -> "Paul"
+    function shortVoiceName(v){
+        if (!v) return '—';
+        const n = v.name.replace(/^(microsoft|google|apple)\s+/i, '').replace(/\s*[-–(].*$/, '').trim();
+        return n || v.name;
+    }
+
+    // Met à jour le libellé du bouton "Voix" en haut de la page
+    function updateVoiceButtonLabel(){
+        const el = $('aichatVoiceCurrent');
+        if (el) el.textContent = shortVoiceName(pickVoice());
+    }
+
+    // Construit la liste cliquable des voix dans le popup (françaises d'abord)
+    function renderVoiceList(){
+        const box = $('aichatVoiceList');
+        if (!box) return;
+        const voices = window.speechSynthesis ? (window.speechSynthesis.getVoices() || []) : [];
+        box.innerHTML = '';
+        if (!voices.length){
+            box.innerHTML = '<div class="aichat-voice-group">Aucune voix détectée. Réessayez dans un instant, ou utilisez Chrome / Edge.</div>';
+            return;
+        }
+        const current = pickVoice();
+        const activeName = current ? current.name : '';
+        const fr = voices.filter(v => /^fr/i.test(v.lang));
+        const others = voices.filter(v => !/^fr/i.test(v.lang));
+        const addItem = (v) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'aichat-voice-item' + (v.name === activeName ? ' is-active' : '');
+            const check = document.createElement('span'); check.className = 'vi-check'; check.textContent = (v.name === activeName ? '✓' : '');
+            const name = document.createElement('span'); name.className = 'vi-name'; name.textContent = v.name + ' — ' + v.lang;
+            const play = document.createElement('span'); play.className = 'vi-play'; play.textContent = '▶';
+            btn.appendChild(check); btn.appendChild(name); btn.appendChild(play);
+            btn.onclick = () => window.aichatChooseVoice(v.name);
+            box.appendChild(btn);
+        };
+        const addGroup = (label, list) => {
+            if (!list.length) return;
+            const h = document.createElement('div'); h.className = 'aichat-voice-group'; h.textContent = label;
+            box.appendChild(h);
+            list.forEach(addItem);
+        };
+        addGroup('Français', fr);
+        addGroup('Autres langues', others);
+    }
+
+    // getVoices() est asynchrone : on attend qu'une voix FR soit prête AVANT de parler,
+    // sinon le navigateur lit avec sa voix par défaut (souvent anglaise => prononciation incorrecte).
+    function ensureVoice(cb){
+        if (pickVoice()) return cb();
+        let done = false;
+        const finish = () => { if (done) return; done = true; pickVoice(); cb(); };
+        try { window.speechSynthesis.addEventListener('voiceschanged', finish, { once: true }); } catch(e){}
+        setTimeout(finish, 1200);
+    }
+
+    // Nettoie le texte avant lecture : retire Markdown, symboles et emojis lus à voix haute
+    function cleanForSpeech(text){
+        if (!text) return '';
+        let t = String(text);
+        t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');              // liens [texte](url) -> texte
+        t = t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, ' '); // emojis / pictogrammes / flèches
+        t = t.replace(/(\d)\s*\/\s*(\d)/g, '$1 sur $2');            // 12/20 -> 12 sur 20
+        t = t.replace(/[*_`~#>|=^{}\[\]<>]/g, ' ');                 // marqueurs Markdown et symboles
+        t = t.replace(/^\s*[-•·]\s+/gm, '');                        // puces en début de ligne
+        t = t.replace(/\s[-–—]\s/g, ', ');                          // tirets isolés -> virgule
+        t = t.replace(/\n{2,}/g, '. ').replace(/\s{2,}/g, ' ');     // espaces / lignes multiples
+        return t.trim();
+    }
+
     function speak(text){
         if (!window.speechSynthesis) return;
-        try {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'fr-FR';
-            u.rate = 1.0;
-            u.pitch = 1.0;
-            const voices = window.speechSynthesis.getVoices();
-            const fr = voices.find(v => /fr/i.test(v.lang));
-            if (fr) u.voice = fr;
-            setMode('speaking');
-            u.onend = () => { setMode('idle'); stopTick(); resetTimer(); };
-            u.onerror = () => { setMode('idle'); stopTick(); resetTimer(); };
-            window.speechSynthesis.speak(u);
-        } catch(e) { setMode('idle'); stopTick(); resetTimer(); }
+        text = cleanForSpeech(text);
+        if (!text) { setMode('idle'); stopTick(); resetTimer(); return; }
+        ensureVoice(function(){
+            try {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                if (state.voice) { u.voice = state.voice; u.lang = state.voice.lang; }
+                else { u.lang = 'fr-FR'; }
+                u.rate = 0.95;
+                u.pitch = 1.0;
+                setMode('speaking');
+                u.onend = () => { setMode('idle'); stopTick(); resetTimer(); };
+                u.onerror = () => { setMode('idle'); stopTick(); resetTimer(); };
+                window.speechSynthesis.speak(u);
+            } catch(e) { setMode('idle'); stopTick(); resetTimer(); }
+        });
     }
 
     async function processQuestion(question){
@@ -3695,10 +3795,35 @@ ${context}`;
         processQuestion(q);
     };
 
+    window.aichatOpenVoiceModal = function(){
+        renderVoiceList();
+        const m = $('aichatVoiceModal');
+        if (m) m.classList.add('show');
+    };
+
+    window.aichatChooseVoice = function(name){
+        const voices = window.speechSynthesis ? (window.speechSynthesis.getVoices() || []) : [];
+        const v = voices.find(x => x.name === name);
+        if (!v) return;
+        state.voice = v;
+        localStorage.setItem(LS_VOICE, name);
+        renderVoiceList();          // rafraîchit la coche dans le popup
+        updateVoiceButtonLabel();   // met à jour le bouton en haut
+        speak('Bonjour, je suis votre assistant. Voici un aperçu de ma voix.'); // écoute immédiate
+    };
+
     window.aichatInit = function(){
         buildWaveform();
         buildParticles();
         setMode('idle');
+        pickVoice();
+        updateVoiceButtonLabel();
+        if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = function(){
+            pickVoice();
+            updateVoiceButtonLabel();
+            const m = $('aichatVoiceModal');
+            if (m && m.classList.contains('show')) renderVoiceList();
+        };
         const status = $('aichatKeyStatus');
         if (status && localStorage.getItem(LS_KEY)) status.textContent = '✓ Clé active';
     };

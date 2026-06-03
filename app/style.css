@@ -3802,6 +3802,18 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 }
 .aichat-keystatus { font-size: 0.85em; color: #16a34a; font-weight: 600; }
 
+/* En-tête de la page Assistant IA + popup de choix de la voix */
+.aichat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+#aichatVoiceBtn { white-space: nowrap; }
+.aichat-voice-list { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; margin: 6px 0 2px; }
+.aichat-voice-group { font-size: 0.74em; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted, #888); margin: 8px 2px 2px; }
+.aichat-voice-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-body); color: var(--text-primary); cursor: pointer; font-size: 0.92em; font-family: var(--font-body); transition: background .15s, border-color .15s; }
+.aichat-voice-item:hover { border-color: var(--primary); }
+.aichat-voice-item.is-active { border-color: var(--primary); background: var(--primary-light); font-weight: 700; }
+.aichat-voice-item .vi-check { width: 16px; color: var(--primary); font-weight: 700; }
+.aichat-voice-item .vi-name { flex: 1; }
+.aichat-voice-item .vi-play { opacity: .65; }
+
 /* Header Backup button — adapt to light header */
 .content-area .header-right .header-backup-btn {
     background: var(--primary-light);

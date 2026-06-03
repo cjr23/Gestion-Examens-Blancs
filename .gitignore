@@ -1,6 +1,9 @@
 # Fichiers sensibles - identifiants et notes personnelles
 Note/
 app/config.local.js
+# Clé API Claude (ne jamais committer)
+api.txt
+app/api.txt
 
 # Paramètres locaux Claude Code
 .claude/

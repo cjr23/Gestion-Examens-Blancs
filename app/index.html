@@ -417,7 +417,10 @@
     <!-- AI CHAT PAGE -->
     <div class="page" id="page-aichat">
         <div class="card aichat-card">
-            <h2>Assistant IA Vocal</h2>
+            <div class="aichat-head">
+                <h2>Assistant IA Vocal</h2>
+                <button class="btn btn-sm btn-primary" id="aichatVoiceBtn" type="button" onclick="aichatOpenVoiceModal()">🔊 Voix : <span id="aichatVoiceCurrent">…</span></button>
+            </div>
             <div class="aichat-stage">
                 <div class="aichat-particles" id="aichatParticles"></div>
                 <div class="aichat-glow"></div>
@@ -655,6 +658,18 @@
         <div class="modal-actions">
             <button class="btn btn-outline" onclick="closeModal('confirmModal')">Annuler</button>
             <button class="btn btn-danger" id="confirmBtn" onclick="">Confirmer</button>
+        </div>
+    </div>
+</div>
+
+<!-- VOICE PICKER MODAL -->
+<div class="modal-overlay" id="aichatVoiceModal">
+    <div class="modal">
+        <h3>🔊 Voix de l'assistant</h3>
+        <div class="alert alert-info">Cliquez sur une voix pour la <b>choisir</b> et l'<b>écouter</b> aussitôt. La voix d'homme est sélectionnée par défaut. Votre choix est mémorisé.</div>
+        <div id="aichatVoiceList" class="aichat-voice-list"></div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal('aichatVoiceModal')">Fermer</button>
         </div>
     </div>
 </div>
