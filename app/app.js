@@ -2552,10 +2552,15 @@ function exportPrintModalToPDF() {
     const opt = {
         margin:       [10, 10, 10, 10],
         filename:     filename,
-        image:        { type: 'png' },
-        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'], before: '.bulletin-page' }
+        // JPEG q0.98 au lieu de PNG : un PNG plein-page n'est quasi pas compressé
+        // (~8 Mo/page !). En JPEG 0.98 la qualité visuelle du texte est équivalente
+        // mais le fichier est ~10× plus léger.
+        image:        { type: 'jpeg', quality: 0.98 },
+        // scale 3 ≈ 260 DPI (net à l'impression) au lieu de 2 ≈ 174 DPI (flou).
+        html2canvas:  { scale: 3, useCORS: true, backgroundColor: '#ffffff', letterRendering: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+        // avoid:'tr' empêche une ligne de tableau d'être coupée entre deux pages.
+        pagebreak:    { mode: ['css', 'legacy'], before: '.bulletin-page', avoid: 'tr' }
     };
     const restoreTheme = () => {
         if (prevTheme === null) html.removeAttribute('data-theme');

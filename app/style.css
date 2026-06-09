@@ -1341,6 +1341,32 @@ td input[type="number"]:focus {
     html[data-theme="dark"] #printModalContent .table-wrapper { background: #fff !important; }
 }
 
+/* ===== IMPRESSION DU MODAL "DOCUMENT" (vectoriel, pleine qualité) =====
+   Le modal a max-height:82vh + overflow:auto -> sans ces règles, "Imprimer"
+   ne sortait que ~1 page (contenu tronqué). Ici on n'imprime QUE le document,
+   déployé en pleine hauteur, en texte vectoriel net et multi-pages.
+   Géré en CSS via :has() (Chrome/Edge/Firefox récents) — aucun script requis,
+   et sans effet sur l'impression directe des autres pages. */
+@media print {
+    body:has(#printModal.show) .app-shell,
+    body:has(#printModal.show) .modal-overlay:not(#printModal),
+    body:has(#printModal.show) .toast-container,
+    body:has(#printModal.show) .autosave-indicator { display: none !important; }
+
+    #printModal.show {
+        position: static; display: block !important; background: none;
+        backdrop-filter: none; padding: 0; height: auto;
+    }
+    #printModal.show .modal {
+        position: static; max-width: none; width: 100%; max-height: none;
+        overflow: visible; box-shadow: none; border: none; border-radius: 0;
+        padding: 0; margin: 0; animation: none;
+    }
+    /* Masque la barre titre + boutons (Imprimer / Exporter / Fermer) */
+    #printModal.show .modal > div:first-child { display: none !important; }
+    #printModal.show #printModalContent tr { page-break-inside: avoid; }
+}
+
 /* ================================================================
    ===== MODERN SAAS DASHBOARD REDESIGN — SIDEBAR LAYOUT  =========
    ================================================================ */
