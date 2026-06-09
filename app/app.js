@@ -2004,6 +2004,9 @@ function exportAllToExcel() {
     // Generate XLSX-compatible XML spreadsheet
     let hasData = false;
     let sheets = '';
+    // Échappe le texte injecté dans le XML : un '&', '<' ou '>' (nom de matière
+    // personnalisé, ou nom restauré d'une ancienne sauvegarde) corromprait le fichier.
+    const xmlEsc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;' }[c]));
 
     Object.keys(LEVELS).forEach(lv => {
         const d = appData.levels[lv];
@@ -2015,7 +2018,7 @@ function exportAllToExcel() {
         let rows = '';
         // Header row
         let headerCells = '<Cell><Data ss:Type="String">N Tab</Data></Cell><Cell><Data ss:Type="String">Prénom</Data></Cell><Cell><Data ss:Type="String">Nom</Data></Cell>';
-        d.subjects.forEach(s => { headerCells += `<Cell><Data ss:Type="String">${s.name} (${s.coef})</Data></Cell>`; });
+        d.subjects.forEach(s => { headerCells += `<Cell><Data ss:Type="String">${xmlEsc(s.name)} (${s.coef})</Data></Cell>`; });
         headerCells += '<Cell><Data ss:Type="String">Total</Data></Cell><Cell><Data ss:Type="String">Moyenne</Data></Cell><Cell><Data ss:Type="String">Rang</Data></Cell><Cell><Data ss:Type="String">Décision</Data></Cell>';
         if (showMention) headerCells += '<Cell><Data ss:Type="String">Mention</Data></Cell>';
         rows += `<Row>${headerCells}</Row>`;
@@ -2023,7 +2026,7 @@ function exportAllToExcel() {
         // Data rows
         const sorted = [...(d.results1 || [])].sort((a, b) => a.rang - b.rang);
         sorted.forEach(r => {
-            let cells = `<Cell><Data ss:Type="Number">${r.student.numTable}</Data></Cell><Cell><Data ss:Type="String">${r.student.prenom}</Data></Cell><Cell><Data ss:Type="String">${r.student.nom}</Data></Cell>`;
+            let cells = `<Cell><Data ss:Type="Number">${r.student.numTable}</Data></Cell><Cell><Data ss:Type="String">${xmlEsc(r.student.prenom)}</Data></Cell><Cell><Data ss:Type="String">${xmlEsc(r.student.nom)}</Data></Cell>`;
             d.subjects.forEach(sub => {
                 const g = d.grades1[r.key] && d.grades1[r.key][sub.code];
                 if (g === 'ABS') cells += '<Cell><Data ss:Type="String">ABS</Data></Cell>';
@@ -2031,8 +2034,8 @@ function exportAllToExcel() {
                 else if (g !== undefined && g !== '') cells += `<Cell><Data ss:Type="Number">${g}</Data></Cell>`;
                 else cells += '<Cell><Data ss:Type="String"></Data></Cell>';
             });
-            cells += `<Cell><Data ss:Type="Number">${r.total}</Data></Cell><Cell><Data ss:Type="Number">${r.moyenne.toFixed(2)}</Data></Cell><Cell><Data ss:Type="Number">${r.rang}</Data></Cell><Cell><Data ss:Type="String">${r.decision}</Data></Cell>`;
-            if (showMention) cells += `<Cell><Data ss:Type="String">${r.mention || ''}</Data></Cell>`;
+            cells += `<Cell><Data ss:Type="Number">${r.total}</Data></Cell><Cell><Data ss:Type="Number">${r.moyenne.toFixed(2)}</Data></Cell><Cell><Data ss:Type="Number">${r.rang}</Data></Cell><Cell><Data ss:Type="String">${xmlEsc(r.decision)}</Data></Cell>`;
+            if (showMention) cells += `<Cell><Data ss:Type="String">${xmlEsc(r.mention || '')}</Data></Cell>`;
             rows += `<Row>${cells}</Row>`;
         });
 
@@ -2439,16 +2442,6 @@ function saveSallesConfig() {
     toast('Salles sauvegardées.', 'success');
 }
 
-function getStudentSalle(studentIdx) {
-    const salles = getSalles();
-    let cumul = 0;
-    for (let i = 0; i < salles.length; i++) {
-        cumul += salles[i].capacite;
-        if (studentIdx < cumul) return salles[i];
-    }
-    return salles[salles.length - 1];
-}
-
 // ========== YEAR SNAPSHOTS (for comparison) ==========
 function getYearSnapshots() {
     try { return JSON.parse(localStorage.getItem('examBlanc_snapshots') || '{}'); } catch(e) { return {}; }
@@ -2819,7 +2812,9 @@ renderDashboard = function() {
 const _origRenderStats = renderStats;
 renderStats = function(mode, btnEl) {
     _origRenderStats(mode, btnEl);
-    if (mode === 'compare') return;
+    // Graphiques génériques (distribution + matières) uniquement sur ces 2 onglets ;
+    // les vues spécialisées (heatmap, radar, sankey, boxplot, calendrier) n'en veulent pas.
+    if (mode !== 'current' && mode !== 'all') return;
     const container = document.getElementById('statsContent');
     if (!container) return;
     if (typeof Chart === 'undefined') return;
@@ -3858,20 +3853,9 @@ ${context}`;
     attachObserver();
 })();
 
-/* ===== LOGIN SPLINE CURSOR ===== */
-(function(){
-    function init(){
-        const card = document.getElementById('loginSplineCard');
-        const cursor = document.getElementById('loginSplineCursor');
-        if (!card || !cursor) { setTimeout(init, 200); return; }
-        card.addEventListener('mousemove', (e) => {
-            const r = card.getBoundingClientRect();
-            cursor.style.left = (e.clientX - r.left) + 'px';
-            cursor.style.top = (e.clientY - r.top) + 'px';
-        });
-    }
-    init();
-})();
+// (Supprimé : ancien curseur "login spline" — les éléments #loginSplineCard /
+// #loginSplineCursor n'existent pas dans index.html, donc l'IIFE bouclait
+// indéfiniment via setTimeout(init, 200) sans jamais s'attacher.)
 
 // ============================================================
 // === V2.0 ADVANCED VISUALIZATIONS ===========================
