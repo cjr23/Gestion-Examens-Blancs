@@ -63,7 +63,7 @@ Une fois connecté, cliquez sur **"Changer mon MdP"** dans la barre latérale. L
 
 | Rôle | Accès |
 |------|-------|
-| **Administrateur** | Surveillance complète en mode lecture seule, avec bannière de monitoring |
+| **Administrateur** | Accès complet (tous les droits) : tableau de bord, paramètres et journal en plus de l'opérationnel, avec bannière de monitoring |
 | **Administration** | Accès opérationnel : saisie des notes, gestion des élèves, documents (sans paramètres ni journal) |
 
 ---

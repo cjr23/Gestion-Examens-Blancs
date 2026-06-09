@@ -1179,8 +1179,10 @@ function calculateResults1() {
         let total = 0, coefUsed = 0, has = false;
         ld.subjects.forEach(sub => {
             const g = grades[sub.code];
-            if (g === 'INAPTE') return; // Inapte EPS: exclude from calculation
-            if (g !== undefined && g !== '' && g !== 'ABS') { total += parseFloat(g) * sub.coef; coefUsed += sub.coef; has = true; }
+            if (g === 'INAPTE') return;                                   // Inapte EPS : exclu du calcul
+            if (g === 'ABS') { coefUsed += sub.coef; has = true; return; } // Absent : compte comme 0 (coef au dénominateur)
+            if (g !== undefined && g !== '') { total += parseFloat(g) * sub.coef; coefUsed += sub.coef; has = true; }
+            // sinon : matière non saisie -> exclue du calcul
         });
         if (!has) return;
         const cTotal = coefUsed || ld.coefTotal;
@@ -1284,7 +1286,13 @@ function calculateResults2() {
         const k = stKey(st), grades = ld.grades2[k] || {};
         let total = 0, has = false;
         let coefUsed2 = 0;
-        ld.subjects2.forEach(sub => { const g = grades[sub.code]; if (g === 'INAPTE') return; if (g !== undefined && g !== '' && g !== 'ABS') { total += parseFloat(g) * sub.coef; coefUsed2 += sub.coef; has = true; } else { coefUsed2 += sub.coef; } });
+        ld.subjects2.forEach(sub => {
+            const g = grades[sub.code];
+            if (g === 'INAPTE') return;                                    // Inapte : exclu
+            if (g === 'ABS') { coefUsed2 += sub.coef; has = true; return; } // Absent : compte comme 0
+            if (g !== undefined && g !== '') { total += parseFloat(g) * sub.coef; coefUsed2 += sub.coef; has = true; }
+            // sinon : matière non saisie -> exclue
+        });
         if (!has) return;
         const effectiveCoef2 = coefUsed2 || ld.coefTotal2;
         const moyenne = total / effectiveCoef2;
