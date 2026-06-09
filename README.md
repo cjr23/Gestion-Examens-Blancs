@@ -110,8 +110,8 @@ Tableau de Bord, Élèves, 1er Tour — Notes, Résultats 1er Tour, 2ème Tour �
 
 Un module défensif (`Security`, en haut de `app/app.js`) protège contre les **injections XSS et SQL** ainsi que les **doubles-clics** :
 
-- **Validation à la saisie** : ajout/modification d'élèves, import CSV, et informations de l'établissement passent par `Security.validateName` / `validateText` / `validateNumber`. Les balises HTML, handlers JavaScript (`onerror=`, `onclick=`…), URLs `javascript:` et patterns SQL (`UNION SELECT`, `OR 1=1`, `--`…) sont rejetés.
-- **Échappement à l'affichage** : les noms d'élèves sont passés par `Security.escapeHTML()` dans les tableaux rendus en `innerHTML` (défense en profondeur pour d'éventuelles données pré-existantes).
+- **Validation à la saisie** : ajout/modification d'élèves, import CSV, import Excel, et informations de l'établissement passent par `Security.validateName` / `validateText` / `validateNumber`. Les balises HTML, handlers JavaScript (`onerror=`, `onclick=`…), URLs `javascript:` et patterns SQL (`UNION SELECT`, `OR 1=1`, `--`…) sont rejetés.
+- **Échappement à l'affichage** : les noms d'élèves sont passés par `Security.escapeHTML()` dans les vues rendues en `innerHTML` (listes d'élèves, saisie des notes, résultats, documents/bulletins, recherche globale, heatmap, mode présentation) — défense en profondeur pour d'éventuelles données restaurées d'une ancienne sauvegarde.
 - **Bouclier global** : tous les `<input>` et `<textarea>` (hors mots de passe) sont surveillés en temps réel ; un champ contenant un pattern suspect est marqué visuellement en orange.
 - **Anti double-clic** : les boutons `.btn-primary`, `.btn-success` et `.btn-danger` sont verrouillés ~700 ms après chaque clic pour éviter les soumissions multiples involontaires.
 

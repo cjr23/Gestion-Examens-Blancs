@@ -788,7 +788,18 @@ function saveStudent() {
         toast(`${prenom} ${nom} ajouté(e) !`, 'success');
         logActivity(`Élève ajouté : ${prenom} ${nom} (${LEVELS[currentLevel].shortLabel})`, 'eleve');
     } else {
+        // Les notes sont indexées par stKey (numTable + nom). Si l'un des deux change,
+        // on migre les notes des deux tours et les clés des résultats déjà calculés,
+        // sinon elles deviendraient orphelines (perte silencieuse).
+        const oldKey = stKey(ld.students[idx]);
         ld.students[idx].numTable = numTable; ld.students[idx].prenom = prenom; ld.students[idx].nom = nom; ld.students[idx].sexe = selectedSexe;
+        const newKey = stKey(ld.students[idx]);
+        if (newKey !== oldKey) {
+            if (ld.grades1[oldKey]) { ld.grades1[newKey] = ld.grades1[oldKey]; delete ld.grades1[oldKey]; }
+            if (ld.grades2[oldKey]) { ld.grades2[newKey] = ld.grades2[oldKey]; delete ld.grades2[oldKey]; }
+            (ld.results1 || []).forEach(r => { if (r.key === oldKey) r.key = newKey; });
+            (ld.results2 || []).forEach(r => { if (r.key === oldKey) r.key = newKey; });
+        }
         toast('Élève modifié(e).', 'success');
     }
     sortStudentsAlpha(ld);
@@ -1005,9 +1016,16 @@ function processXlsxImport() {
     const ld = getLevelData();
     let count = 0, skipped = 0;
     dataRows.forEach(row => {
-        const prenom = String(row[cPrenom] || '').trim();
-        const nom = String(row[cNom] || '').trim().toUpperCase();
-        if (!prenom || !nom) { skipped++; return; }
+        const rawPrenom = String(row[cPrenom] || '').trim();
+        const rawNom = String(row[cNom] || '').trim();
+        if (!rawPrenom || !rawNom) { skipped++; return; }
+        // Même validation que l'ajout manuel et l'import CSV : rejette le HTML/script
+        // et les caractères interdits (défense XSS/SQLi à l'entrée).
+        const prenomCheck = Security.validateName(rawPrenom, { field: 'Prénom' });
+        const nomCheck = Security.validateName(rawNom, { field: 'Nom' });
+        if (!prenomCheck.ok || !nomCheck.ok) { skipped++; return; }
+        const prenom = prenomCheck.value;
+        const nom = nomCheck.value.toUpperCase();
         let numTable;
         if (cNum >= 0 && row[cNum] !== '' && row[cNum] !== undefined) {
             numTable = parseInt(row[cNum]) || (ld.students.length + 1);
@@ -1054,7 +1072,7 @@ function renderGrades1Table() {
     ld.students.forEach((st, si) => {
         const k = stKey(st);
         if (!ld.grades1[k]) ld.grades1[k] = {};
-        let html = `<td>${si + 1}</td><td>${st.numTable}</td><td style="text-align:left; white-space:nowrap;">${st.prenom}</td><td style="text-align:left;">${st.nom}</td>`;
+        let html = `<td>${si + 1}</td><td>${st.numTable}</td><td style="text-align:left; white-space:nowrap;">${Security.escapeHTML(st.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(st.nom)}</td>`;
         ld.subjects.forEach((sub, subi) => {
             const val = ld.grades1[k][sub.code];
             const isAbsent = val === 'ABS';
@@ -1205,7 +1223,7 @@ function showResults1Tab(tab, btnEl) {
     filtered.forEach(r => {
         const cls = r.decision === 'Admis' ? 'admis' : r.decision === '2ème Tour' ? 'deuxieme-tour' : 'ajourne';
         const mentionHtml = showMention ? `<td><span class="mention-tag ${getMentionClass(r.mention || '')}">${r.mention || '-'}</span></td>` : '';
-        html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${r.student.prenom}</td><td style="text-align:left;">${r.student.nom}</td>
+        html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td>
             <td>${r.total}</td><td>${r.moyenne.toFixed(2)}</td><td>${tab === 'all' ? r.rang : r.rf}</td><td class="${cls}">${r.decision}</td>${mentionHtml}</tr>`;
     });
     html += `</tbody></table><p style="margin-top:10px;"><b>Total: ${filtered.length}</b></p>`;
@@ -1226,7 +1244,7 @@ function renderGrades2Table() {
     ld.tour2Students.forEach((st, si) => {
         const k = stKey(st);
         if (!ld.grades2[k]) ld.grades2[k] = {};
-        let html = `<td>${si + 1}</td><td>${st.numTable}</td><td style="text-align:left;">${st.prenom}</td><td style="text-align:left;">${st.nom}</td>`;
+        let html = `<td>${si + 1}</td><td>${st.numTable}</td><td style="text-align:left;">${Security.escapeHTML(st.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(st.nom)}</td>`;
         ld.subjects2.forEach((sub, subi) => {
             const val = ld.grades2[k][sub.code];
             const isAbsent = val === 'ABS';
@@ -1300,7 +1318,7 @@ function showResults2Tab(tab, btnEl) {
     filtered.forEach(r => {
         const cls = r.decision === 'Admis' ? 'admis' : 'ajourne';
         const mentionHtml2 = showMention2 ? `<td><span class="mention-tag ${getMentionClass(r.mention || '')}">${r.mention || '-'}</span></td>` : '';
-        html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${r.student.prenom}</td><td style="text-align:left;">${r.student.nom}</td>
+        html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td>
             <td>${r.total}</td><td>${r.moyenne.toFixed(2)}</td><td>${r.rang}</td><td class="${cls}">${r.decision}</td>${mentionHtml2}</tr>`;
     });
     html += '</tbody></table>';
@@ -1766,7 +1784,7 @@ function printDocument(type) {
             let count = 0;
             while (studentIdx < ld.students.length && count < salle.capacite) {
                 const s = ld.students[studentIdx];
-                html += `<tr><td>${count + 1}</td><td style="text-align:left;">${s.prenom}</td><td style="text-align:left;">${s.nom}</td></tr>`;
+                html += `<tr><td>${count + 1}</td><td style="text-align:left;">${Security.escapeHTML(s.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(s.nom)}</td></tr>`;
                 studentIdx++; count++;
             }
             html += `</tbody></table><p><b>Effectif: ${count}</b></p>`;
@@ -1783,7 +1801,7 @@ function printDocument(type) {
             let count = 0;
             while (sIdx < ld.students.length && count < salle.capacite) {
                 const s = ld.students[sIdx];
-                html += `<tr><td>${count + 1}</td><td style="text-align:left;">${s.prenom}</td><td style="text-align:left;">${s.nom}</td><td></td></tr>`;
+                html += `<tr><td>${count + 1}</td><td style="text-align:left;">${Security.escapeHTML(s.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(s.nom)}</td><td></td></tr>`;
                 sIdx++; count++;
             }
             html += `</tbody></table><p><b>Effectif: ${count}</b></p>`;
@@ -1805,7 +1823,7 @@ function printDocument(type) {
         if (admis.length === 0) { toast('Aucun admis d\'office. Veuillez d\'abord calculer les résultats.', 'warning'); return; }
         html = docHeader("LISTE DES CANDIDATS ADMIS D'OFFICE", cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
         html += `<table><thead><tr><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Moyenne</th><th>Rang</th></tr></thead><tbody>`;
-        admis.forEach((r, i) => html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${r.student.prenom}</td><td style="text-align:left;">${r.student.nom}</td><td>${r.moyenne.toFixed(1)}</td><td>${i+1}</td></tr>`);
+        admis.forEach((r, i) => html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td><td>${r.moyenne.toFixed(1)}</td><td>${i+1}</td></tr>`);
         html += `</tbody></table><p><b>Total: ${admis.length}</b></p>`;
     } else if (type === 'admis2e') {
         modalTitle.textContent = 'Admis 2ème Groupe';
@@ -1813,7 +1831,7 @@ function printDocument(type) {
         if (admis2.length === 0) { toast('Aucun admis au 2ème groupe.', 'warning'); return; }
         html = docHeader('LISTE DES CANDIDATS ADMIS AU 2ÈME GROUPE', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
         html += `<table><thead><tr><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Moyenne</th><th>Rang</th></tr></thead><tbody>`;
-        admis2.forEach((r, i) => html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${r.student.prenom}</td><td style="text-align:left;">${r.student.nom}</td><td>${r.moyenne.toFixed(1)}</td><td>${i+1}</td></tr>`);
+        admis2.forEach((r, i) => html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td><td>${r.moyenne.toFixed(1)}</td><td>${i+1}</td></tr>`);
         html += `</tbody></table><p><b>Total: ${admis2.length}</b></p>`;
     }
     // ===== BULLETIN INDIVIDUEL =====
@@ -1827,10 +1845,10 @@ function printDocument(type) {
             html += `<div class="bulletin-page" ${idx > 0 ? 'style="page-break-before:always; margin-top:30px;"' : ''}>`;
             html += docHeader('BULLETIN DE NOTES', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
             html += `<div style="display:flex; justify-content:space-between; margin-bottom:12px; padding:10px; background:#f5efe8; border-radius:8px;">
-                <div><b>Nom:</b> ${r.student.nom}</div>
-                <div><b>Prénom(s):</b> ${r.student.prenom}</div>
+                <div><b>Nom:</b> ${Security.escapeHTML(r.student.nom)}</div>
+                <div><b>Prénom(s):</b> ${Security.escapeHTML(r.student.prenom)}</div>
                 <div><b>N Table:</b> ${r.student.numTable}</div>
-                <div><b>Anonymat:</b> ${r.student.anonymat || '-'}</div>
+                <div><b>Anonymat:</b> ${Security.escapeHTML(r.student.anonymat || '-')}</div>
             </div>`;
             html += `<table><thead><tr><th>Matière</th><th>Coefficient</th><th>Note /20</th><th>Note x Coef</th></tr></thead><tbody>`;
             let totalPts = 0;
@@ -1878,7 +1896,7 @@ function printDocument(type) {
             html += docHeader('LISTE DES ÉLÈVES - ' + c.className, c.examLabel + ' ' + appData.year);
             html += `<table><thead><tr><th>N°</th><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Sexe</th></tr></thead><tbody>`;
             sorted.forEach((s, i) => {
-                html += `<tr><td>${i + 1}</td><td>${s.numTable}</td><td style="text-align:left;">${s.prenom}</td><td style="text-align:left;">${s.nom}</td><td>${s.sexe || '-'}</td></tr>`;
+                html += `<tr><td>${i + 1}</td><td>${s.numTable}</td><td style="text-align:left;">${Security.escapeHTML(s.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(s.nom)}</td><td>${s.sexe || '-'}</td></tr>`;
             });
             html += `</tbody></table><p><b>Effectif ${c.shortLabel}: ${sorted.length}</b></p>`;
             totalGlobal += sorted.length;
@@ -2269,7 +2287,7 @@ function performGlobalSearch(query) {
                 const decStr = res1 ? ` - ${res1.decision}` : '';
                 html += `<div class="global-search-item" onclick="goToStudent('${lv}', ${st.numTable})">
                     <span class="global-search-level">${LEVELS[lv].shortLabel}</span>
-                    <span class="global-search-name">${st.prenom} ${st.nom}</span>
+                    <span class="global-search-name">${Security.escapeHTML(st.prenom)} ${Security.escapeHTML(st.nom)}</span>
                     <span class="global-search-info">N${st.numTable}${moyStr}${decStr}</span>
                 </div>`;
             }
@@ -3326,7 +3344,7 @@ printDocument = function(type) {
         const tour2 = ld.results1.filter(r => r.decision === '2ème Tour');
         if (tour2.length === 0) return '';
         const options = tour2.map(r =>
-            `<option value="${r.key}">${r.student.prenom} ${r.student.nom} — ${r.total}/${cfg.coefTotal * 20} (moy ${r.moyenne.toFixed(2)})</option>`
+            `<option value="${r.key}">${Security.escapeHTML(r.student.prenom)} ${Security.escapeHTML(r.student.nom)} — ${r.total}/${cfg.coefTotal * 20} (moy ${r.moyenne.toFixed(2)})</option>`
         ).join('');
         return `<div class="card sim-card-anim" style="margin-top:12px;">
             <h3>Simulateur individuel (candidats au 2ᵉ Tour)</h3>
@@ -3531,15 +3549,15 @@ printDocument = function(type) {
                     numTable: s.numTable, anonymat: s.anonymat, prenom: s.prenom, nom: s.nom, sexe: s.sexe
                 }));
                 ctx.levels[lvl] = {
-                    name: cfg ? cfg.name : lvl,
+                    name: cfg ? cfg.label : lvl,
                     seuilAdmis: ld.seuilAdmis, seuil2eTour: ld.seuil2eTour, seuilAdmis2: ld.seuilAdmis2,
-                    subjects: (ld.subjects || []).map(s => ({ code: s.code, nom: s.nom, coef: s.coef })),
+                    subjects: (ld.subjects || []).map(s => ({ code: s.code, nom: s.name, coef: s.coef })),
                     studentsCount: students.length,
                     students: students.slice(0, 200),
                     grades1: ld.grades1 || {},
                     grades2: ld.grades2 || {},
-                    results1: (ld.results1 || []).map(r => ({ numTable: r.numTable, prenom: r.prenom, nom: r.nom, moyenne: r.moyenne, total: r.total, statut: r.statut })),
-                    results2: (ld.results2 || []).map(r => ({ numTable: r.numTable, prenom: r.prenom, nom: r.nom, moyenne: r.moyenne, statut: r.statut }))
+                    results1: (ld.results1 || []).map(r => ({ numTable: r.student.numTable, prenom: r.student.prenom, nom: r.student.nom, moyenne: r.moyenne, total: r.total, statut: r.decision, mention: r.mention })),
+                    results2: (ld.results2 || []).map(r => ({ numTable: r.student.numTable, prenom: r.student.prenom, nom: r.student.nom, moyenne: r.moyenne, total: r.total, statut: r.decision, mention: r.mention }))
                 };
             });
             let json = JSON.stringify(ctx);
@@ -3560,7 +3578,7 @@ Tu réponds en français, de façon concise (2-3 phrases max pour la voix), en t
 IMPORTANT : ta réponse est lue à voix haute. Écris en texte simple, SANS Markdown ni mise en forme — pas d'astérisques (*), de dièses (#), de tirets de liste, de back-ticks ni d'emojis. Énonce les notes naturellement (« 12 sur 20 » plutôt que « 12/20 ») et écris les symboles en toutes lettres (« pour cent », « supérieur à »).
 Tu peux raisonner et calculer à partir de ces données : moyennes, classements, taux de réussite, comparaisons entre élèves, matières ou niveaux.
 Si l'information n'est pas dans les données, dis-le clairement.
-Format des notes : /20. Les moyennes sont sur 20. Le statut peut être "admis", "tour2", "ajourné".
+Format des notes : /20. Les moyennes sont sur 20. Dans les résultats, le champ "statut" vaut exactement "Admis", "2ème Tour" ou "Ajourné" ; le champ "mention" (Terminale uniquement) vaut "Très Bien", "Bien", "Assez Bien" ou "Passable". Les notes des matières sont dans "grades1"/"grades2", indexées par une clé "numéro de table_NOM" ; une valeur "ABS" = absent, "INAPTE" = dispensé (EPS).
 
 Données actuelles de l'application :
 ${context}`;
@@ -3930,7 +3948,7 @@ function renderHeatmapView(container) {
 
         html += `<tr>
             <td class="heatmap-fixed-col">${idx+1}</td>
-            <td class="heatmap-fixed-col heatmap-name">${s.nom || ''} ${s.prenom || ''}</td>`;
+            <td class="heatmap-fixed-col heatmap-name">${Security.escapeHTML(s.nom || '')} ${Security.escapeHTML(s.prenom || '')}</td>`;
         subjects.forEach(subj => {
             const val = stGrades[subj.code];
             if (val === 'ABS') {
@@ -3995,7 +4013,7 @@ function renderRadarView(container) {
     const subjects = ld.subjects;
     const students = ld.students.slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
 
-    let options = students.map(s => `<option value="${stKey(s)}">${s.nom} ${s.prenom} (n°${s.numTable})</option>`).join('');
+    let options = students.map(s => `<option value="${stKey(s)}">${Security.escapeHTML(s.nom)} ${Security.escapeHTML(s.prenom)} (n°${s.numTable})</option>`).join('');
 
     container.innerHTML = `
         <div class="viz-header">
@@ -4282,8 +4300,8 @@ function renderBoxPlotView(container) {
 // 5. CALENDAR HEATMAP - Activité de saisie
 // ============================================================
 function renderCalendarHeatmapView(container) {
-    // Reconstituer l'activité depuis le journal
-    const log = (appData && appData.activityLog) ? appData.activityLog : [];
+    // Reconstituer l'activité depuis le journal (stocké dans localStorage, pas dans appData)
+    const log = getActivityLog();
     const counts = {};
     log.forEach(entry => {
         const d = new Date(entry.time || entry.date || Date.now());
@@ -4481,8 +4499,8 @@ function _presentationShowAt(idx) {
     target.innerHTML = `
         <div class="presentation-card presentation-card-anim">
             <div class="presentation-rang">#${r.rang}</div>
-            <div class="presentation-student-name">${r.student.prenom || ''} ${r.student.nom || ''}</div>
-            <div class="presentation-student-num">N° ${r.student.numTable || ''}${r.student.anonymat ? ' · ' + r.student.anonymat : ''}</div>
+            <div class="presentation-student-name">${Security.escapeHTML(r.student.prenom || '')} ${Security.escapeHTML(r.student.nom || '')}</div>
+            <div class="presentation-student-num">N° ${r.student.numTable || ''}${r.student.anonymat ? ' · ' + Security.escapeHTML(r.student.anonymat) : ''}</div>
             <div class="presentation-moy" style="color:${decColor}">${r.moyenne.toFixed(2)}<small>/20</small></div>
             <div class="presentation-decision" style="background:${decColor}">${decIcon} ${r.decision}${r.mention ? ' — ' + r.mention : ''}</div>
         </div>
