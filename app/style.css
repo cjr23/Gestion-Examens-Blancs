@@ -1486,12 +1486,13 @@ td input[type="number"]:focus {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 14px;
+    padding: 11px 14px;
+    min-height: 44px;
     background: transparent;
     border: none;
     color: var(--sidebar-text-muted);
     font-family: var(--font-body);
-    font-size: 0.86em;
+    font-size: 0.88em;
     font-weight: 600;
     text-align: left;
     cursor: pointer;
@@ -4546,13 +4547,13 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 /* ========== MODULE ÉCOLE (école, classes, professeurs) ========== */
 /* ================================================================ */
 
-/* Titre de section dans la sidebar */
+/* Titre de section dans la sidebar (thème sombre doré) */
 .nav-section-title {
-    font-size: 0.68em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;
-    color: var(--gray-400); padding: 14px 16px 4px;
-    border-top: 1px solid var(--border-color); margin-top: 10px;
+    font-size: 0.64em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--sidebar-text-muted); padding: 16px 14px 6px;
+    border-top: 1px solid rgba(184,166,122,0.15); margin-top: 12px;
 }
-.app-shell.collapsed .nav-section-title { padding: 10px 0 0; height: 0; overflow: hidden; }
+.app-shell.collapsed .nav-section-title { padding: 12px 0 0; height: 0; overflow: hidden; }
 
 /* Cartes de classes */
 .classe-card {
@@ -4666,28 +4667,90 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 [data-theme="dark"] .crm-bar-track { background: #3d3025; }
 [data-theme="dark"] .crm-row:hover td { background: rgba(200,169,106,0.08); }
 
-/* ========== COMMUTATEUR DE MODULES (CRM multi-espaces) ========== */
-.module-switcher {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-    padding: 4px 2px 12px; margin-bottom: 8px;
-    border-bottom: 1px solid var(--border-color);
+/* ========== NAVIGATION ACCORDÉON PAR MODULES (CRM multi-espaces) ==========
+   Les 4 modules sont des en-têtes de groupe toujours visibles ; les pages du
+   module actif se déploient dessous, le long d'un rail doré. */
+.ms-title {
+    font-size: 0.64em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--sidebar-text-muted); padding: 2px 14px 8px;
 }
-.module-switcher button {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    padding: 9px 4px; border: 1.5px solid var(--border-color); border-radius: var(--radius-sm);
-    background: var(--bg-card); color: var(--text-secondary); cursor: pointer;
-    font-size: 0.7em; font-weight: 700; letter-spacing: 0.02em;
-    transition: all 0.18s ease;
+.nav-group { display: flex; flex-direction: column; }
+.nav-group + .nav-group { margin-top: 6px; }
+
+/* En-tête de groupe (module) : grande cible, icône en pastille, chevron animé */
+.sidebar-nav .nav-group-head {
+    display: flex; align-items: center; gap: 11px;
+    width: 100%; min-height: 46px; padding: 8px 12px;
+    background: rgba(184,166,122,0.05);
+    border: 1px solid rgba(184,166,122,0.12);
+    border-radius: 12px;
+    color: var(--sidebar-text);
+    font-size: 0.86em; font-weight: 700;
+    animation: none;
 }
-.module-switcher button:hover { border-color: var(--primary); color: var(--text-primary); transform: translateY(-1px); }
-.module-switcher button.active {
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-    border-color: var(--primary); color: #f5efe8;
-    box-shadow: var(--shadow-md);
+.sidebar-nav .nav-group-head .ms-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    background: rgba(184,166,122,0.13);
+    color: var(--sidebar-active);
+    transition: all 0.2s ease;
 }
-.app-shell.collapsed .module-switcher { grid-template-columns: 1fr; }
-.app-shell.collapsed .module-switcher button span { display: none; }
-.app-shell.collapsed .module-switcher button { padding: 8px 4px; }
+.sidebar-nav .nav-group-head .ms-text { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.nav-group-chevron { flex-shrink: 0; opacity: 0.45; transition: transform 0.3s ease, opacity 0.2s ease; transform: rotate(-90deg); }
+.sidebar-nav .nav-group-head:hover {
+    background: rgba(184,166,122,0.13);
+    border-color: rgba(184,166,122,0.35);
+    color: #f5efe8;
+}
+.sidebar-nav .nav-group-head:hover .ms-icon { transform: scale(1.06); }
+.sidebar-nav .nav-group-head:hover .nav-group-chevron { opacity: 0.9; }
+.nav-group.open .nav-group-head {
+    background: linear-gradient(135deg, #C8B486 0%, #8d7a4e 100%);
+    border-color: rgba(200,180,134,0.7);
+    color: #1a0e06;
+    box-shadow: 0 6px 18px rgba(184,166,122,0.3);
+}
+.nav-group.open .nav-group-head .ms-icon { background: rgba(26,14,6,0.16); color: #1a0e06; }
+.nav-group.open .nav-group-chevron { transform: rotate(0deg); opacity: 1; }
+
+/* Pages du module : déploiement animé le long d'un rail */
+.nav-group-pages {
+    display: flex; flex-direction: column; gap: 2px;
+    max-height: 0; overflow: hidden; opacity: 0;
+    margin: 0 0 0 15px;
+    padding-left: 7px;
+    border-left: 1px solid rgba(184,166,122,0.22);
+    transition: max-height 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin 0.3s ease;
+}
+.nav-group.open .nav-group-pages {
+    max-height: 560px; opacity: 1;
+    margin-top: 5px; margin-bottom: 3px;
+}
+.sidebar-nav .nav-group-pages button {
+    padding: 9px 12px; min-height: 40px;
+    font-size: 0.85em;
+    animation: none;
+}
+.sidebar-nav .nav-group-pages button .nav-icon { width: 26px; height: 26px; border-radius: 7px; }
+
+/* Mode réduit : icônes seules + infobulles (le rail disparaît) */
+.app-shell.collapsed .ms-title { display: none; }
+.app-shell.collapsed .sidebar-nav .nav-group-head { justify-content: center; padding: 8px; min-height: 42px; }
+.app-shell.collapsed .nav-group-head .ms-text,
+.app-shell.collapsed .nav-group-head .nav-group-chevron,
+.app-shell.collapsed .nav-group-head .nav-badge { display: none; }
+.app-shell.collapsed .nav-group-pages { margin-left: 0; padding-left: 0; border-left: none; }
+.app-shell.collapsed .sidebar-nav .nav-group-head::after {
+    content: attr(data-label);
+    position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%);
+    background: #1a0e06; color: #f5efe8;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 0.82em; font-weight: 600; white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000;
+    border: 1px solid rgba(184,166,122,0.2);
+}
+.app-shell.collapsed .sidebar-nav .nav-group-head:hover::after { opacity: 1; }
 
 /* Badges de statut de paiement */
 .pay-badge {
@@ -4716,9 +4779,7 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 .crm-paiement-item:last-child { border-bottom: none; }
 .crm-paiement-item .crm-activity-time { display: block; }
 
-/* Mode sombre */
-[data-theme="dark"] .module-switcher button { background: #1a1008; }
-[data-theme="dark"] .module-switcher button.active { background: linear-gradient(135deg, #4a3828, #2a1a0e); color: var(--accent); border-color: var(--accent); }
+/* Mode sombre (le commutateur vit dans la sidebar, toujours sombre : rien à surcharger) */
 [data-theme="dark"] .pay-badge { background: #3d3025; }
 [data-theme="dark"] .pay-badge.ok { background: rgba(16,185,129,0.16); color: #34d399; }
 [data-theme="dark"] .pay-badge.partial { background: rgba(245,158,11,0.16); color: #fbbf24; }
@@ -4759,3 +4820,13 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 [data-theme="dark"] .cycle-head { background: linear-gradient(135deg, rgba(200,169,106,0.10), transparent); }
 [data-theme="dark"] .statut-badge.permanent { background: rgba(16,185,129,0.16); color: #34d399; }
 [data-theme="dark"] .statut-badge.vacataire { background: rgba(245,158,11,0.16); color: #fbbf24; }
+
+/* Badge compteur sur un bouton de nav (inscriptions en attente) */
+.nav-badge {
+    margin-left: auto; flex: 0 0 auto;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--warning, #f59e0b); color: #fff;
+    font-size: 0.72em; font-weight: 800; border-radius: 999px;
+}
+.app-shell.collapsed .sidebar-nav .nav-badge { display: none; }

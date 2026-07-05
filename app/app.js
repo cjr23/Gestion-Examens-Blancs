@@ -575,7 +575,7 @@ const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
     ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'professeurs'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
-    compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'paiements', 'depenses'] }
+    compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'depenses'] }
 };
 const SYSTEM_PAGES = ['journal', 'aichat', 'config'];
 let currentModule = 'examens';
@@ -596,16 +596,14 @@ function moduleOfPage(pageId) {
     return Object.keys(MODULES).find(m => MODULES[m].pages.includes(pageId)) || null;
 }
 
-// Met à jour le commutateur + la visibilité des boutons de nav, sans naviguer
+// Ouvre le groupe accordéon du module actif (les autres se replient),
+// sans naviguer. Les en-têtes de groupe restent tous visibles.
 function syncModuleUI(m) {
     if (!MODULES[m]) m = 'examens';
     currentModule = m;
     try { localStorage.setItem('examBlanc_module', m); } catch(e) {}
-    document.querySelectorAll('#moduleSwitcher button').forEach(b => b.classList.toggle('active', b.dataset.module === m));
-    // Uniquement les boutons de navigation directs : ceux du commutateur
-    // (.module-switcher) portent aussi data-module et doivent rester visibles.
-    document.querySelectorAll('#mainNav > button[data-module]').forEach(el => {
-        el.style.display = (el.dataset.module === m && !el.dataset.roleHidden) ? '' : 'none';
+    document.querySelectorAll('#mainNav .nav-group').forEach(g => {
+        g.classList.toggle('open', g.dataset.module === m);
     });
 }
 
@@ -692,8 +690,8 @@ function showPage(pageId) {
     const mod = moduleOfPage(pageId);
     if (mod && mod !== currentModule) syncModuleUI(mod);
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    // Boutons de nav directs uniquement (pas ceux du commutateur de modules)
-    document.querySelectorAll('#mainNav > button').forEach(b => b.classList.remove('active'));
+    // Boutons de page uniquement (pas les en-têtes de groupe de modules)
+    document.querySelectorAll('#mainNav button[data-page]').forEach(b => b.classList.remove('active'));
     document.getElementById('page-' + pageId).classList.add('active');
     const navBtn = document.querySelector(`#mainNav button[data-page="${pageId}"]`);
     if (navBtn) navBtn.classList.add('active');
@@ -722,8 +720,10 @@ function refreshCurrentPage() {
     if (currentPage === 'professeurs') renderProfsTable();
     if (currentPage === 'personnel') renderPersonnelTable();
     if (currentPage === 'compta') renderComptaDashboard();
+    if (currentPage === 'inscriptions') renderInscriptionsPage();
     if (currentPage === 'paiements') renderPaiementsPage();
     if (currentPage === 'depenses') renderDepensesPage();
+    updateInscriptionsBadge();
 }
 
 // ========== STUDENTS ==========
@@ -2717,7 +2717,9 @@ function init() {
         syncModuleUI('examens');
     }
 }
-init();
+// NOTE : init() est appelé tout en bas du fichier, après l'initialisation de
+// toutes les constantes des modules (sinon erreur "before initialization"
+// quand init() restaure un module dont le rendu utilise ces constantes).
 
 // ========== PDF EXPORT ==========
 function exportPrintModalToPDF() {
@@ -4739,6 +4741,8 @@ function getEcoleData() {
     if (!Array.isArray(appData.ecole.professeurs)) appData.ecole.professeurs = [];
     // Direction : un préfet par cycle, un directeur pour l'établissement
     if (!appData.ecole.direction) appData.ecole.direction = { directeur: '', prefetMoyen: '', prefetSecondaire: '' };
+    // Inscriptions en attente de validation par la comptabilité
+    if (!Array.isArray(appData.ecole.preinscriptions)) appData.ecole.preinscriptions = [];
     return appData.ecole;
 }
 
@@ -4880,6 +4884,10 @@ function renderClassesPage() {
         <button class="btn btn-primary" onclick="showAddClasseModal()">+ Ajouter une classe</button>
         <button class="btn btn-success" onclick="showAddEleveModal()">+ Inscrire un élève</button>
     </div>`;
+    if (ec.preinscriptions.length > 0) {
+        html += `<div class="alert alert-warning"><strong>${ec.preinscriptions.length}</strong> inscription(s) en attente de validation par la comptabilité.
+            <a href="#" onclick="showPage('inscriptions'); return false;">Voir les inscriptions</a></div>`;
+    }
     if (ec.classes.length === 0) {
         html += '<div class="empty-state"><p>Aucune classe pour le moment. Cliquez sur « + Ajouter une classe » : elle sera automatiquement rangée dans son cycle (Moyen ou Secondaire).</p></div>';
     } else {
@@ -4940,7 +4948,7 @@ function renderClasseDetail(classe) {
     let html = `
         <div class="btn-group no-print">
             <button class="btn btn-outline" onclick="closeClasseDetail()">&larr; Toutes les classes</button>
-            <button class="btn btn-primary" onclick="showAddEleveModal('${classe.id}')">+ Ajouter un élève</button>
+            <button class="btn btn-primary" onclick="showAddEleveModal('${classe.id}')">+ Inscrire un élève</button>
         </div>
         <div class="alert alert-info">
             Niveau : <strong>${Security.escapeHTML(classe.niveau)}</strong>
@@ -5083,6 +5091,7 @@ function showAddEleveModal(classeId) {
     document.getElementById('eleveModalTitle').textContent = 'Inscrire un élève';
     document.getElementById('eleveClasseId').value = classeId || '';
     document.getElementById('editEleveIdx').value = '-1';
+    document.getElementById('editPreinscriptionId').value = '';
     populateEleveClasseSelect(classeId || '');
     document.getElementById('elevePrenom').value = '';
     document.getElementById('eleveNom').value = '';
@@ -5100,6 +5109,7 @@ function editEleve(classeId, idx) {
     document.getElementById('eleveModalTitle').textContent = 'Modifier l\'élève';
     document.getElementById('eleveClasseId').value = classeId;
     document.getElementById('editEleveIdx').value = String(idx);
+    document.getElementById('editPreinscriptionId').value = '';
     populateEleveClasseSelect(classeId);
     document.getElementById('elevePrenom').value = e.prenom;
     document.getElementById('eleveNom').value = e.nom;
@@ -5130,7 +5140,15 @@ function saveEleve() {
         telephone: document.getElementById('eleveTelTuteur').value.trim(),
         adresse: document.getElementById('eleveAdresse').value.trim()
     };
-    if (idx >= 0 && origClasse && origClasse.eleves[idx]) {
+    const preId = document.getElementById('editPreinscriptionId').value;
+    if (preId) {
+        // Modification d'une inscription encore en attente
+        const pre = ec.preinscriptions.find(p => p.id === preId);
+        if (!pre) { closeModal('eleveModal'); return; }
+        Object.assign(pre, eleve, { classeId: targetClasse.id });
+        logActivity(`Inscription modifiée : ${prenom} ${nom} (${targetClasse.nom})`, 'config');
+        toast('Inscription modifiée.', 'success');
+    } else if (idx >= 0 && origClasse && origClasse.eleves[idx]) {
         // L'id (référence des paiements) et les notes internes (fiche CRM)
         // ne passent pas par ce modal : on les conserve.
         eleve.id = origClasse.eleves[idx].id || ecoleUid('el_');
@@ -5147,18 +5165,21 @@ function saveEleve() {
             logActivity(`Élève transféré de ${origClasse.nom} vers ${targetClasse.nom} : ${prenom} ${nom}`, 'config');
             toast(`Élève transféré en ${targetClasse.nom}.`, 'success');
         }
+        // Liste alphabétique canonique (même convention que le module Examens)
+        targetClasse.eleves.sort((a, b) => (a.nom + ' ' + a.prenom).localeCompare(b.nom + ' ' + b.prenom, 'fr'));
     } else {
-        eleve.id = ecoleUid('el_');
-        targetClasse.eleves.push(eleve);
-        logActivity(`Élève inscrit en ${targetClasse.nom} : ${prenom} ${nom}`, 'config');
-        toast(`Élève inscrit en ${targetClasse.nom}.`, 'success');
+        // Nouvelle inscription : l'élève n'intègre PAS la classe tout de suite.
+        // C'est la comptabilité qui l'affectera après encaissement du paiement.
+        ec.preinscriptions.push(Object.assign({ id: ecoleUid('el_'), classeId: targetClasse.id, date: new Date().toISOString().slice(0, 10) }, eleve));
+        logActivity(`Inscription en attente : ${prenom} ${nom} (${targetClasse.nom})`, 'config');
+        toast('Inscription enregistrée — en attente de validation par la comptabilité.', 'info', 5000);
     }
-    // Même convention que le module Examens : liste alphabétique canonique
-    targetClasse.eleves.sort((a, b) => (a.nom + ' ' + a.prenom).localeCompare(b.nom + ' ' + b.prenom, 'fr'));
     saveData();
     closeModal('eleveModal');
+    updateInscriptionsBadge();
     if (currentPage === 'classes') renderClassesPage();
     if (currentPage === 'ecole') renderEcolePage();
+    if (currentPage === 'inscriptions') renderInscriptionsPage();
 }
 
 function confirmDeleteEleve(classeId, idx) {
@@ -5637,7 +5658,10 @@ function renderComptaDashboard() {
     const depenses = co.depenses.reduce((s, d) => s + (d.montant || 0), 0);
     const solde = encaisse - depenses;
     const taux = attendu > 0 ? Math.round(encaisse / attendu * 100) : 0;
+    const nbPre = ec.preinscriptions.length;
     document.getElementById('comptaStats').innerHTML = `
+        <div class="stat-card ${nbPre > 0 ? 'orange' : 'blue'}" style="cursor:pointer;" onclick="showPage('inscriptions')" title="Voir les inscriptions en attente">
+            <div class="number">${nbPre}</div><div class="label">Inscriptions en attente</div></div>
         <div class="stat-card blue"><div class="number">${formatMoney(attendu)}</div><div class="label">Attendu (scolarité)</div></div>
         <div class="stat-card green"><div class="number">${formatMoney(encaisse)}</div><div class="label">Encaissé</div><div class="pct">${taux}% recouvré</div></div>
         <div class="stat-card orange"><div class="number">${formatMoney(depenses)}</div><div class="label">Dépenses</div></div>
@@ -5758,6 +5782,7 @@ function showAddPaiementModal(eleveId) {
     const found = findEleveById(eleveId);
     if (!found) return;
     document.getElementById('paiementEleveId').value = eleveId;
+    document.getElementById('paiementPreId').value = '';
     document.getElementById('paiementEleveNom').textContent =
         found.eleve.prenom + ' ' + found.eleve.nom + ' — ' + found.classe.nom;
     document.getElementById('paiementMontant').value = '';
@@ -5770,11 +5795,35 @@ function showAddPaiementModal(eleveId) {
 
 function savePaiement() {
     const co = getComptaData();
+    const montant = parseInt(document.getElementById('paiementMontant').value, 10);
+    if (!montant || montant <= 0) { toast('Saisissez un montant valide.', 'warning'); return; }
+    // Validation d'une inscription en attente : l'encaissement affecte l'élève à sa classe
+    const preId = document.getElementById('paiementPreId').value;
+    if (preId) {
+        const res = affecterPreinscription(preId);
+        if (!res) return;
+        co.paiements.push({
+            id: ecoleUid('pa_'),
+            eleveId: res.eleve.id,
+            classeId: res.classe.id,
+            montant: montant,
+            date: document.getElementById('paiementDate').value || new Date().toISOString().slice(0, 10),
+            motif: document.getElementById('paiementMotif').value,
+            mode: document.getElementById('paiementMode').value,
+            note: document.getElementById('paiementNote').value.trim()
+        });
+        saveData();
+        logActivity(`Inscription validée : ${res.eleve.prenom} ${res.eleve.nom} affecté(e) en ${res.classe.nom} (${formatMoney(montant)} encaissés)`, 'config');
+        toast(`${res.eleve.prenom} ${res.eleve.nom} affecté(e) en ${res.classe.nom} — paiement encaissé.`, 'success', 5000);
+        closeModal('paiementModal');
+        updateInscriptionsBadge();
+        if (currentPage === 'inscriptions') renderInscriptionsPage();
+        if (currentPage === 'compta') renderComptaDashboard();
+        return;
+    }
     const eleveId = document.getElementById('paiementEleveId').value;
     const found = findEleveById(eleveId);
     if (!found) { closeModal('paiementModal'); return; }
-    const montant = parseInt(document.getElementById('paiementMontant').value, 10);
-    if (!montant || montant <= 0) { toast('Saisissez un montant valide.', 'warning'); return; }
     co.paiements.push({
         id: ecoleUid('pa_'),
         eleveId: eleveId,
@@ -5843,6 +5892,136 @@ function crmEleveScolariteHTML(e, classe, classeId, idx) {
             ${liste}
             <button class="btn btn-sm btn-success" style="margin-top:8px;" onclick="showAddPaiementModal('${e.id}')">+ Enregistrer un paiement</button>
         </div>`;
+}
+
+// ---------- Inscriptions en attente (validées par la comptabilité) ----------
+function updateInscriptionsBadge() {
+    const n = getEcoleData().preinscriptions.length;
+    // Badge sur la page Inscriptions + rappel sur l'en-tête du module Comptabilité
+    ['inscriptionsBadge', 'inscriptionsBadgeModule'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = n;
+        el.style.display = n > 0 ? '' : 'none';
+    });
+}
+
+function renderInscriptionsPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('inscriptionsContent');
+    if (ec.preinscriptions.length === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucune inscription en attente. Les nouvelles inscriptions (module École) apparaîtront ici pour validation.</p></div>';
+        return;
+    }
+    let rows = '';
+    ec.preinscriptions.forEach(pre => {
+        const classe = ec.classes.find(c => c.id === pre.classeId);
+        rows += `<tr>
+            <td><span class="crm-name-cell">${crmAvatar(pre.prenom, pre.nom)}<span>${esc(pre.prenom)} <strong>${esc(pre.nom)}</strong></span></span></td>
+            <td>${classe ? esc(classe.nom) + ' <span class="classe-niveau-badge">' + esc(classe.niveau) + '</span>' : '<span class="pay-badge none">Classe supprimée</span>'}</td>
+            <td>${formatDateNaissanceFR(pre.date)}</td>
+            <td>${esc(pre.telephone || '—')}</td>
+            <td class="no-print">
+                <button class="btn btn-sm btn-success" onclick="validerInscription('${pre.id}')">Encaisser &amp; affecter</button>
+                <button class="btn btn-sm btn-outline" onclick="affecterSansPaiement('${pre.id}')">Affecter sans paiement</button>
+                <button class="btn btn-sm btn-info" onclick="editPreinscription('${pre.id}')">Modifier</button>
+                <button class="btn btn-sm btn-danger" onclick="annulerInscription('${pre.id}')">Annuler</button>
+            </td>
+        </tr>`;
+    });
+    box.innerHTML = `
+        <div class="alert alert-warning"><strong>${ec.preinscriptions.length}</strong> inscription(s) en attente de validation.</div>
+        <div class="table-wrapper"><table>
+            <thead><tr><th>Élève</th><th>Classe demandée</th><th>Date d'inscription</th><th>Tél. tuteur</th><th class="no-print">Actions</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>`;
+}
+
+// Déplace une pré-inscription vers sa classe (retourne l'élève affecté ou null)
+function affecterPreinscription(preId) {
+    const ec = getEcoleData();
+    const pre = ec.preinscriptions.find(p => p.id === preId);
+    if (!pre) return null;
+    const classe = ec.classes.find(c => c.id === pre.classeId);
+    if (!classe) { toast('La classe demandée n\'existe plus — modifiez l\'inscription.', 'error'); return null; }
+    const eleve = {
+        id: pre.id, prenom: pre.prenom, nom: pre.nom, sexe: pre.sexe,
+        dateNaissance: pre.dateNaissance || '', telephone: pre.telephone || '',
+        adresse: pre.adresse || '', notes: ''
+    };
+    classe.eleves.push(eleve);
+    classe.eleves.sort((a, b) => (a.nom + ' ' + a.prenom).localeCompare(b.nom + ' ' + b.prenom, 'fr'));
+    ec.preinscriptions = ec.preinscriptions.filter(p => p.id !== preId);
+    return { eleve: eleve, classe: classe };
+}
+
+// Ouvre le modal de paiement : l'affectation aura lieu à l'encaissement
+function validerInscription(preId) {
+    const ec = getEcoleData();
+    const pre = ec.preinscriptions.find(p => p.id === preId);
+    if (!pre) return;
+    if (!ec.classes.some(c => c.id === pre.classeId)) {
+        toast('La classe demandée n\'existe plus — modifiez l\'inscription.', 'error');
+        return;
+    }
+    document.getElementById('paiementPreId').value = preId;
+    document.getElementById('paiementEleveId').value = '';
+    document.getElementById('paiementEleveNom').textContent =
+        pre.prenom + ' ' + pre.nom + ' — inscription en ' + (ec.classes.find(c => c.id === pre.classeId).nom);
+    document.getElementById('paiementMontant').value = '';
+    document.getElementById('paiementDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('paiementMotif').value = 'Inscription';
+    document.getElementById('paiementMode').value = 'Espèces';
+    document.getElementById('paiementNote').value = '';
+    document.getElementById('paiementModal').classList.add('show');
+}
+
+// Cas particuliers (exonération, paiement déjà réglé ailleurs)
+function affecterSansPaiement(preId) {
+    const pre = getEcoleData().preinscriptions.find(p => p.id === preId);
+    if (!pre) return;
+    showConfirm('Affecter sans paiement', `Affecter ${pre.prenom} ${pre.nom} à sa classe sans encaisser de paiement ?`, () => {
+        const res = affecterPreinscription(preId);
+        if (!res) return;
+        saveData();
+        logActivity(`Inscription validée sans paiement : ${res.eleve.prenom} ${res.eleve.nom} affecté(e) en ${res.classe.nom}`, 'config');
+        toast(`${res.eleve.prenom} ${res.eleve.nom} affecté(e) en ${res.classe.nom}.`, 'success');
+        renderInscriptionsPage();
+        updateInscriptionsBadge();
+    });
+}
+
+function editPreinscription(preId) {
+    const ec = getEcoleData();
+    const pre = ec.preinscriptions.find(p => p.id === preId);
+    if (!pre) return;
+    document.getElementById('eleveModalTitle').textContent = 'Modifier l\'inscription';
+    document.getElementById('eleveClasseId').value = '';
+    document.getElementById('editEleveIdx').value = '-1';
+    document.getElementById('editPreinscriptionId').value = preId;
+    populateEleveClasseSelect(pre.classeId);
+    document.getElementById('elevePrenom').value = pre.prenom;
+    document.getElementById('eleveNom').value = pre.nom;
+    document.getElementById('eleveDateNaissance').value = pre.dateNaissance || '';
+    document.getElementById('eleveTelTuteur').value = pre.telephone || '';
+    document.getElementById('eleveAdresse').value = pre.adresse || '';
+    selectEleveSexe(pre.sexe === 'F' ? 'F' : 'M');
+    document.getElementById('eleveModal').classList.add('show');
+}
+
+function annulerInscription(preId) {
+    const ec = getEcoleData();
+    const pre = ec.preinscriptions.find(p => p.id === preId);
+    if (!pre) return;
+    showConfirm('Annuler l\'inscription', `Annuler l'inscription de ${pre.prenom} ${pre.nom} ? L'élève ne sera affecté à aucune classe.`, () => {
+        ec.preinscriptions = ec.preinscriptions.filter(p => p.id !== preId);
+        saveData();
+        logActivity(`Inscription annulée : ${pre.prenom} ${pre.nom}`, 'config');
+        toast('Inscription annulée.', 'info');
+        renderInscriptionsPage();
+        updateInscriptionsBadge();
+    });
 }
 
 // ---------- Dépenses ----------
@@ -5933,3 +6112,5 @@ function confirmDeleteDepense(id) {
         renderDepensesPage();
     });
 }
+// ========== DÉMARRAGE (après toutes les déclarations) ==========
+init();

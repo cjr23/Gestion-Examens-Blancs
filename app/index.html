@@ -152,106 +152,130 @@
         </button>
     </div>
     <nav class="sidebar-nav" id="mainNav">
-        <!-- COMMUTATEUR DE MODULES (façon CRM multi-espaces) -->
-        <div class="module-switcher" id="moduleSwitcher">
-            <button data-module="examens" class="active" onclick="showModule('examens')" title="Examens Blancs">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
-                <span>Examens</span>
+        <div class="ms-title">Modules</div>
+
+        <!-- GROUPE EXAMENS -->
+        <div class="nav-group" data-module="examens">
+            <button type="button" class="nav-group-head" onclick="showModule('examens')" data-label="Examens Blancs">
+                <span class="ms-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+                <span class="ms-text">Examens Blancs</span>
+                <svg class="nav-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
-            <button data-module="ecole" onclick="showModule('ecole')" title="École">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
-                <span>École</span>
-            </button>
-            <button data-module="admin" onclick="showModule('admin')" title="Administration">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                <span>Admin</span>
-            </button>
-            <button data-module="compta" onclick="showModule('compta')" title="Comptabilité">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <span>Compta</span>
-            </button>
+            <div class="nav-group-pages">
+                <button class="active" onclick="showPage('dashboard', this)" data-page="dashboard" data-label="Tableau de Bord">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+                    <span class="nav-text">Tableau de Bord</span>
+                </button>
+                <button onclick="showPage('students', this)" data-page="students" data-label="Élèves">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                    <span class="nav-text">Élèves</span>
+                </button>
+                <button onclick="showPage('grades1', this)" data-page="grades1" data-label="1er Tour - Notes">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+                    <span class="nav-text">1er Tour - Notes</span>
+                </button>
+                <button onclick="showPage('results1', this)" data-page="results1" data-label="Résultats 1er Tour">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+                    <span class="nav-text">Résultats 1er Tour</span>
+                </button>
+                <button onclick="showPage('grades2', this)" data-page="grades2" data-label="2ème Tour - Notes">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg></span>
+                    <span class="nav-text">2ème Tour - Notes</span>
+                </button>
+                <button onclick="showPage('results2', this)" data-page="results2" data-label="Résultats 2ème Tour">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+                    <span class="nav-text">Résultats 2ème Tour</span>
+                </button>
+                <button onclick="showPage('stats', this)" data-page="stats" data-label="Statistiques">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/></svg></span>
+                    <span class="nav-text">Statistiques</span>
+                </button>
+                <button onclick="showPage('documents', this)" data-page="documents" data-label="Documents">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+                    <span class="nav-text">Documents</span>
+                </button>
+            </div>
         </div>
 
-        <!-- MODULE EXAMENS -->
-        <button class="active" onclick="showPage('dashboard', this)" data-page="dashboard" data-module="examens" data-label="Tableau de Bord">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
-            <span class="nav-text">Tableau de Bord</span>
-        </button>
-        <button onclick="showPage('students', this)" data-page="students" data-module="examens" data-label="Élèves">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <span class="nav-text">Élèves</span>
-        </button>
-        <button onclick="showPage('grades1', this)" data-page="grades1" data-module="examens" data-label="1er Tour - Notes">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
-            <span class="nav-text">1er Tour - Notes</span>
-        </button>
-        <button onclick="showPage('results1', this)" data-page="results1" data-module="examens" data-label="Résultats 1er Tour">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
-            <span class="nav-text">Résultats 1er Tour</span>
-        </button>
-        <button onclick="showPage('grades2', this)" data-page="grades2" data-module="examens" data-label="2ème Tour - Notes">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg></span>
-            <span class="nav-text">2ème Tour - Notes</span>
-        </button>
-        <button onclick="showPage('results2', this)" data-page="results2" data-module="examens" data-label="Résultats 2ème Tour">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
-            <span class="nav-text">Résultats 2ème Tour</span>
-        </button>
-        <button onclick="showPage('stats', this)" data-page="stats" data-module="examens" data-label="Statistiques">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/></svg></span>
-            <span class="nav-text">Statistiques</span>
-        </button>
-        <button onclick="showPage('documents', this)" data-page="documents" data-module="examens" data-label="Documents">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><polyline points="14 2 14 8 20 8"/></svg></span>
-            <span class="nav-text">Documents</span>
-        </button>
+        <!-- GROUPE ÉCOLE -->
+        <div class="nav-group" data-module="ecole">
+            <button type="button" class="nav-group-head" onclick="showModule('ecole')" data-label="École">
+                <span class="ms-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span>
+                <span class="ms-text">École</span>
+                <svg class="nav-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="nav-group-pages">
+                <button onclick="showPage('ecole', this)" data-page="ecole" data-label="Mon École">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M10 9h.01"/><path d="M14 9h.01"/></svg></span>
+                    <span class="nav-text">Mon École</span>
+                </button>
+                <button onclick="showPage('classes', this)" data-page="classes" data-label="Classes">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+                    <span class="nav-text">Classes</span>
+                </button>
+                <button onclick="showPage('professeurs', this)" data-page="professeurs" data-label="Professeurs">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3h6v8h-6z" fill="none"/><path d="M19 3v8"/></svg></span>
+                    <span class="nav-text">Professeurs</span>
+                </button>
+            </div>
+        </div>
 
-        <!-- MODULE ÉCOLE -->
-        <button onclick="showPage('ecole', this)" data-page="ecole" data-module="ecole" data-label="Mon École">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M10 9h.01"/><path d="M14 9h.01"/></svg></span>
-            <span class="nav-text">Mon École</span>
-        </button>
-        <button onclick="showPage('classes', this)" data-page="classes" data-module="ecole" data-label="Classes">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
-            <span class="nav-text">Classes</span>
-        </button>
-        <button onclick="showPage('professeurs', this)" data-page="professeurs" data-module="ecole" data-label="Professeurs">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3h6v8h-6z" fill="none"/><path d="M19 3v8"/></svg></span>
-            <span class="nav-text">Professeurs</span>
-        </button>
+        <!-- GROUPE ADMINISTRATION -->
+        <div class="nav-group" data-module="admin">
+            <button type="button" class="nav-group-head" onclick="showModule('admin')" data-label="Administration">
+                <span class="ms-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></span>
+                <span class="ms-text">Administration</span>
+                <svg class="nav-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="nav-group-pages">
+                <button onclick="showPage('personnel', this)" data-page="personnel" data-label="Personnel">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                    <span class="nav-text">Personnel</span>
+                </button>
+            </div>
+        </div>
 
-        <!-- MODULE ADMINISTRATION -->
-        <button onclick="showPage('personnel', this)" data-page="personnel" data-module="admin" data-label="Personnel">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <span class="nav-text">Personnel</span>
-        </button>
-
-        <!-- MODULE COMPTABILITÉ -->
-        <button onclick="showPage('compta', this)" data-page="compta" data-module="compta" data-label="Vue d'ensemble">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span>
-            <span class="nav-text">Vue d'ensemble</span>
-        </button>
-        <button onclick="showPage('paiements', this)" data-page="paiements" data-module="compta" data-label="Paiements">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
-            <span class="nav-text">Paiements</span>
-        </button>
-        <button onclick="showPage('depenses', this)" data-page="depenses" data-module="compta" data-label="Dépenses">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg></span>
-            <span class="nav-text">Dépenses</span>
-        </button>
+        <!-- GROUPE COMPTABILITÉ -->
+        <div class="nav-group" data-module="compta">
+            <button type="button" class="nav-group-head" onclick="showModule('compta')" data-label="Comptabilité">
+                <span class="ms-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+                <span class="ms-text">Comptabilité</span>
+                <span class="nav-badge" id="inscriptionsBadgeModule" style="display:none;">0</span>
+                <svg class="nav-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="nav-group-pages">
+                <button onclick="showPage('compta', this)" data-page="compta" data-label="Vue d'ensemble">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span>
+                    <span class="nav-text">Vue d'ensemble</span>
+                </button>
+                <button onclick="showPage('inscriptions', this)" data-page="inscriptions" data-label="Inscriptions">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+                    <span class="nav-text">Inscriptions</span>
+                    <span class="nav-badge" id="inscriptionsBadge" style="display:none;">0</span>
+                </button>
+                <button onclick="showPage('paiements', this)" data-page="paiements" data-label="Paiements">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
+                    <span class="nav-text">Paiements</span>
+                </button>
+                <button onclick="showPage('depenses', this)" data-page="depenses" data-label="Dépenses">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg></span>
+                    <span class="nav-text">Dépenses</span>
+                </button>
+            </div>
+        </div>
 
         <!-- SYSTÈME (visible dans tous les modules) -->
         <div class="nav-section-title">Système</div>
         <button onclick="showPage('journal', this)" data-page="journal" data-label="Journal">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
             <span class="nav-text">Journal</span>
         </button>
         <button onclick="showPage('aichat', this)" data-page="aichat" data-label="Assistant IA">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span>
+            <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span>
             <span class="nav-text">Assistant IA</span>
         </button>
         <button onclick="showPage('config', this)" data-page="config" data-label="Paramètres">
-            <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+            <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
             <span class="nav-text">Paramètres</span>
         </button>
     </nav>
@@ -661,6 +685,15 @@
         </div>
     </div>
 
+    <!-- INSCRIPTIONS EN ATTENTE PAGE -->
+    <div class="page" id="page-inscriptions">
+        <div class="card">
+            <h2>Inscriptions en attente</h2>
+            <div class="alert alert-info">Un élève inscrit n'intègre sa classe qu'une fois son paiement d'inscription <strong>encaissé et validé par la comptabilité</strong>.</div>
+            <div id="inscriptionsContent"></div>
+        </div>
+    </div>
+
     <!-- PAIEMENTS PAGE -->
     <div class="page" id="page-paiements">
         <div class="card">
@@ -927,6 +960,7 @@
         <h3 id="eleveModalTitle">Inscrire un élève</h3>
         <input type="hidden" id="eleveClasseId" value="">
         <input type="hidden" id="editEleveIdx" value="-1">
+        <input type="hidden" id="editPreinscriptionId" value="">
         <div class="form-group"><label>Classe d'inscription</label><select id="eleveClasse" style="width:100%;"></select></div>
         <div class="form-group"><label>Prénom(s)</label><input type="text" id="elevePrenom"></div>
         <div class="form-group"><label>Nom</label><input type="text" id="eleveNom"></div>
@@ -998,6 +1032,7 @@
     <div class="modal">
         <h3>Enregistrer un paiement</h3>
         <input type="hidden" id="paiementEleveId" value="">
+        <input type="hidden" id="paiementPreId" value="">
         <div class="alert alert-info">Élève : <strong id="paiementEleveNom"></strong></div>
         <div class="form-group"><label>Montant (F CFA)</label><input type="number" id="paiementMontant" min="1" step="500"></div>
         <div class="form-group"><label>Date</label><input type="date" id="paiementDate"></div>
