@@ -1856,7 +1856,7 @@ function printDocument(type) {
         salles.forEach((salle, si) => {
             if (si > 0) html += '<div style="page-break-before:always; margin-top:20px;"></div>';
             html += docHeader('LISTE DES CANDIDATS', cfg.className + ' - ' + salle.nom + ' (Capacité: ' + salle.capacite + ')');
-            html += `<table><thead><tr><th>N</th><th>PRENOM(S)</th><th>NOM</th></tr></thead><tbody>`;
+            html += `<table><thead><tr><th>N</th><th>PRÉNOM(S)</th><th>NOM</th></tr></thead><tbody>`;
             let count = 0;
             while (studentIdx < ld.students.length && count < salle.capacite) {
                 const s = ld.students[studentIdx];
@@ -1872,8 +1872,8 @@ function printDocument(type) {
         let sIdx = 0;
         sallesE.forEach((salle, si) => {
             if (si > 0) html += '<div style="page-break-before:always; margin-top:20px;"></div>';
-            html += docHeader("LISTE D'EMARGEMENT", salle.nom + ' - ' + cfg.className);
-            html += `<table><thead><tr><th>N</th><th>PRENOM(S)</th><th>NOM</th><th style="width:200px;">Émargement</th></tr></thead><tbody>`;
+            html += docHeader("LISTE D'ÉMARGEMENT", salle.nom + ' - ' + cfg.className);
+            html += `<table><thead><tr><th>N</th><th>PRÉNOM(S)</th><th>NOM</th><th style="width:200px;">Émargement</th></tr></thead><tbody>`;
             let count = 0;
             while (sIdx < ld.students.length && count < salle.capacite) {
                 const s = ld.students[sIdx];

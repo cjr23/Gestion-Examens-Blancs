@@ -327,7 +327,7 @@
 <div class="level-bar">
     <span>NIVEAU :</span>
     <button class="level-btn active" onclick="selectLevel('bfem3')" id="lvl-bfem3">
-        3eme (BFEM) <span class="level-count" id="count-bfem3">0</span>
+        3ème (BFEM) <span class="level-count" id="count-bfem3">0</span>
     </button>
     <button class="level-btn" onclick="selectLevel('bacTS')" id="lvl-bacTS">
         Terminale S <span class="level-count" id="count-bacTS">0</span>
@@ -364,7 +364,7 @@
                 <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
                 <input type="text" id="studentSearch" placeholder="Rechercher un élève..." oninput="onStudentSearchInput()">
             </div>
-            <div class="alert alert-info">Total: <strong id="studentCount">0</strong> élève(s) dans ce niveau</div>
+            <div class="alert alert-info">Total : <strong id="studentCount">0</strong> élève(s) dans ce niveau</div>
             <div class="table-wrapper">
                 <table id="studentsTable">
                     <thead><tr><th>N° Table</th><th>Anonymat</th><th>Prénom(s)</th><th>Nom</th><th>Sexe</th><th class="no-print">Inapte EPS</th><th class="no-print">Actions</th></tr></thead>
@@ -477,7 +477,7 @@
                 <div class="config-card" onclick="printDocument('emargement')"><h3>Liste d'Émargement</h3><p>Feuille de présence</p></div>
                 <div class="config-card" onclick="printDocument('ficheNote')"><h3>Fiche de Notes</h3><p>Fiche pour correcteurs</p></div>
                 <div class="config-card" onclick="printDocument('admisOffice')"><h3>Admis d'Office</h3><p>Liste des admis 1er tour</p></div>
-                <div class="config-card" onclick="printDocument('admis2e')"><h3>Admis 2ème Groupe</h3><p>Liste des admis 2eme tour</p></div>
+                <div class="config-card" onclick="printDocument('admis2e')"><h3>Admis 2ème Groupe</h3><p>Liste des admis 2ème tour</p></div>
                 <div class="config-card" onclick="printDocument('resultats1')"><h3>Résultats complets (1er Tour)</h3><p>Tableau complet : notes, moyenne, rang, décision</p></div>
                 <div class="config-card" onclick="printDocument('classement')"><h3>Classement par mérite</h3><p>Élèves classés par moyenne décroissante</p></div>
                 <div class="config-card" onclick="printDocument('convoques2e')"><h3>Convoqués au 2ème Tour</h3><p>Candidats à repasser au 2ème tour</p></div>
@@ -628,7 +628,7 @@
                 <button onclick="setProfStatutFilter('Permanent', this)">Permanents</button>
                 <button onclick="setProfStatutFilter('Vacataire', this)">Vacataires</button>
             </div>
-            <div class="alert alert-info">Total: <strong id="profCount">0</strong> professeur(s) — <span id="profCountDetail"></span></div>
+            <div class="alert alert-info">Total : <strong id="profCount">0</strong> professeur(s) — <span id="profCountDetail"></span></div>
             <div class="table-wrapper">
                 <table id="profsTable">
                     <thead><tr><th>Prénom(s)</th><th>Nom</th><th>Matière</th><th>Statut</th><th>Téléphone</th><th>Email</th><th>Classes</th><th class="no-print">Actions</th></tr></thead>
@@ -649,7 +649,7 @@
                 <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
                 <input type="text" id="personnelSearch" placeholder="Rechercher un membre du personnel..." oninput="onPersonnelSearchInput()">
             </div>
-            <div class="alert alert-info">Total: <strong id="personnelCount">0</strong> membre(s) du personnel</div>
+            <div class="alert alert-info">Total : <strong id="personnelCount">0</strong> membre(s) du personnel</div>
             <div class="table-wrapper">
                 <table id="personnelTable">
                     <thead><tr><th>Prénom(s)</th><th>Nom</th><th>Fonction</th><th>Téléphone</th><th>Email</th><th class="no-print">Actions</th></tr></thead>
