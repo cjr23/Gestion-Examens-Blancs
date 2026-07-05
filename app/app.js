@@ -573,7 +573,7 @@ let currentPage = 'dashboard';
 // Chaque module a sa propre navigation ; les pages "Système" sont communes.
 const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
-    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'professeurs'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'professeurs', 'emploiTemps'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
     compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'depenses'] }
 };
@@ -605,6 +605,11 @@ const ECOLE_MATIERES_DEFAUT = [
     { nom: 'Morale et Catéchèse', code: 'MOR', coef: 1 }
 ];
 const TRIMESTRES = { t1: '1er Trimestre', t2: '2ème Trimestre', t3: '3ème Trimestre' };
+
+// Grille hebdomadaire des emplois du temps
+const EDT_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+const EDT_CRENEAUX = ['08h-09h', '09h-10h', '10h-11h', '11h-12h', '12h-13h', '15h-16h', '16h-17h', '17h-18h'];
+function edtKey(jour, creneau) { return jour + '|' + creneau; }
 
 function moduleOfPage(pageId) {
     return Object.keys(MODULES).find(m => MODULES[m].pages.includes(pageId)) || null;
@@ -732,6 +737,7 @@ function refreshCurrentPage() {
     if (currentPage === 'ecole') renderEcolePage();
     if (currentPage === 'classes') renderClassesPage();
     if (currentPage === 'professeurs') renderProfsTable();
+    if (currentPage === 'emploiTemps') renderEmploiTempsPage();
     if (currentPage === 'personnel') renderPersonnelTable();
     if (currentPage === 'compta') renderComptaDashboard();
     if (currentPage === 'inscriptions') renderInscriptionsPage();
@@ -4761,6 +4767,8 @@ function getEcoleData() {
     if (!Array.isArray(appData.ecole.matieres) || appData.ecole.matieres.length === 0) {
         appData.ecole.matieres = JSON.parse(JSON.stringify(ECOLE_MATIERES_DEFAUT));
     }
+    // Emplois du temps : { classeId: { 'Jour|Créneau': { matiereCode, profId } } }
+    if (!appData.ecole.emplois) appData.ecole.emplois = {};
     return appData.ecole;
 }
 
@@ -5068,8 +5076,9 @@ function confirmDeleteClasse(id) {
     if (!c) return;
     showConfirm('Supprimer la classe', `Supprimer la classe « ${c.nom} » et ses ${c.eleves.length} élève(s) ? Cette action est irréversible.`, () => {
         ec.classes = ec.classes.filter(x => x.id !== id);
-        // La classe supprimée ne doit plus apparaître chez les professeurs
+        // La classe supprimée ne doit plus apparaître chez les professeurs ni dans les EDT
         ec.professeurs.forEach(p => { p.classes = (p.classes || []).filter(cid => cid !== id); });
+        delete ec.emplois[id];
         if (currentClasseId === id) currentClasseId = null;
         saveData();
         logActivity('Classe supprimée : ' + c.nom, 'config');
@@ -5286,6 +5295,28 @@ function populateProfClassesChecks(selectedIds) {
     ).join('');
 }
 
+// Permanent -> volume d'heures fixé ; Vacataire -> grille de disponibilités
+function toggleProfStatutFields() {
+    const vacataire = document.getElementById('profStatut').value === 'Vacataire';
+    document.getElementById('profHeuresGroup').style.display = vacataire ? 'none' : '';
+    document.getElementById('profDispoGroup').style.display = vacataire ? '' : 'none';
+}
+
+function renderProfDispoGrid(selected) {
+    const box = document.getElementById('profDispoGrid');
+    let html = '<table class="dispo-table"><thead><tr><th></th>' +
+        EDT_JOURS.map(j => `<th>${j.slice(0, 3)}</th>`).join('') + '</tr></thead><tbody>';
+    EDT_CRENEAUX.forEach(cr => {
+        html += `<tr><td class="dispo-creneau">${cr}</td>`;
+        EDT_JOURS.forEach(j => {
+            const k = edtKey(j, cr);
+            html += `<td><input type="checkbox" class="dispo-check" value="${k}"${selected.includes(k) ? ' checked' : ''} title="${j} ${cr}"></td>`;
+        });
+        html += '</tr>';
+    });
+    box.innerHTML = html + '</tbody></table>';
+}
+
 function showAddProfModal() {
     document.getElementById('profModalTitle').textContent = 'Ajouter un professeur';
     document.getElementById('editProfId').value = '';
@@ -5293,6 +5324,9 @@ function showAddProfModal() {
     document.getElementById('profNom').value = '';
     document.getElementById('profMatiere').value = '';
     document.getElementById('profStatut').value = 'Permanent';
+    document.getElementById('profHeures').value = '';
+    renderProfDispoGrid([]);
+    toggleProfStatutFields();
     document.getElementById('profTel').value = '';
     document.getElementById('profEmail').value = '';
     populateProfClassesChecks([]);
@@ -5308,6 +5342,9 @@ function editProf(id) {
     document.getElementById('profNom').value = p.nom;
     document.getElementById('profMatiere').value = p.matiere || '';
     document.getElementById('profStatut').value = profStatut(p);
+    document.getElementById('profHeures').value = p.heuresSemaine || '';
+    renderProfDispoGrid(p.disponibilites || []);
+    toggleProfStatutFields();
     document.getElementById('profTel').value = p.telephone || '';
     document.getElementById('profEmail').value = p.email || '';
     populateProfClassesChecks(p.classes || []);
@@ -5329,7 +5366,9 @@ function saveProf() {
         statut: document.getElementById('profStatut').value,
         telephone: document.getElementById('profTel').value.trim(),
         email: document.getElementById('profEmail').value.trim(),
-        classes: classes
+        classes: classes,
+        heuresSemaine: Math.max(0, parseInt(document.getElementById('profHeures').value, 10) || 0),
+        disponibilites: Array.from(document.querySelectorAll('#profDispoGrid .dispo-check:checked')).map(c => c.value)
     };
     if (id) {
         const p = ec.professeurs.find(p => p.id === id);
@@ -5355,8 +5394,11 @@ function confirmDeleteProf(id) {
     showConfirm('Supprimer le professeur', `Supprimer ${p.prenom} ${p.nom} ?`, () => {
         closeCrmDrawer();
         ec.professeurs = ec.professeurs.filter(x => x.id !== id);
-        // Retire ce professeur des classes dont il était le prof principal
+        // Retire ce professeur des classes dont il était le prof principal et des EDT
         ec.classes.forEach(c => { if (c.profId === id) c.profId = ''; });
+        Object.values(ec.emplois).forEach(grille => {
+            Object.keys(grille).forEach(k => { if (grille[k] && grille[k].profId === id) delete grille[k]; });
+        });
         saveData();
         logActivity(`Professeur supprimé : ${p.prenom} ${p.nom}`, 'config');
         toast('Professeur supprimé.', 'success');
@@ -5458,6 +5500,13 @@ function openProfFiche(id) {
             <h4>Classes</h4>
             ${crmInfoRow('Enseigne en', classesNoms.length ? classesNoms.map(n => '<span class="classe-chip">' + esc(n) + '</span>').join(' ') : '—')}
             ${crmInfoRow('Prof. principal de', principalDe.length ? principalDe.map(n => '<span class="classe-chip">' + esc(n) + '</span>').join(' ') : '—')}
+        </div>
+        <div class="crm-section">
+            <h4>Emploi du temps</h4>
+            ${crmInfoRow('Heures affectées', '<strong>' + countProfHeures(p.id) + ' h / semaine</strong>')}
+            ${profStatut(p) === 'Permanent'
+                ? crmInfoRow('Heures fixées', p.heuresSemaine ? p.heuresSemaine + ' h / semaine' : '—')
+                : crmInfoRow('Disponibilités', (p.disponibilites || []).length + ' créneau(x)')}
         </div>
         <div class="crm-section">
             <h4>Notes internes</h4>
@@ -5636,6 +5685,223 @@ function genererBulletinsClasse(classeId) {
     document.getElementById('printModalContent').innerHTML = html;
     document.getElementById('printModal').classList.add('show');
     logActivity(`Bulletins générés : ${classe.nom} (${TRIMESTRES[currentTrimestre]})`, 'export');
+}
+
+// ---------- Emplois du temps ----------
+// Heures hebdomadaires affectées à un prof, toutes classes confondues
+function countProfHeures(profId) {
+    const ec = getEcoleData();
+    let n = 0;
+    Object.values(ec.emplois).forEach(grille => {
+        Object.values(grille).forEach(slot => { if (slot && slot.profId === profId) n++; });
+    });
+    return n;
+}
+
+// La classe (autre que classeId) où le prof est déjà occupé sur ce créneau, sinon null
+function profOccupeAilleurs(profId, key, classeId) {
+    const ec = getEcoleData();
+    for (const cid of Object.keys(ec.emplois)) {
+        if (cid === classeId) continue;
+        const slot = ec.emplois[cid][key];
+        if (slot && slot.profId === profId) {
+            const c = ec.classes.find(c => c.id === cid);
+            return c ? c.nom : 'autre classe';
+        }
+    }
+    return null;
+}
+
+function renderEmploiTempsPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('edtClasseSelect');
+    const content = document.getElementById('edtContent');
+    if (ec.classes.length === 0) {
+        sel.innerHTML = '';
+        content.innerHTML = '<div class="empty-state"><p>Créez d\'abord des classes dans le module École.</p></div>';
+        renderEdtCharge();
+        return;
+    }
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    const prev = sel.value;
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const cls = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (cls.length === 0) return '';
+        return `<optgroup label="${CYCLES[cy].label}">` +
+            cls.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('') + '</optgroup>';
+    }).join('');
+    if (prev && tri.some(c => c.id === prev)) sel.value = prev;
+    const classe = ec.classes.find(c => c.id === sel.value) || tri[0];
+    if (!ec.emplois[classe.id]) ec.emplois[classe.id] = {};
+    const grille = ec.emplois[classe.id];
+    let html = `<div class="btn-group no-print">
+        <button class="btn btn-info" onclick="imprimerEmploiTemps('${classe.id}')">Imprimer l'emploi du temps</button>
+    </div>
+    <div class="table-wrapper"><table class="edt-table"><thead><tr><th>Horaire</th>` +
+        EDT_JOURS.map(j => `<th>${j}</th>`).join('') + '</tr></thead><tbody>';
+    EDT_CRENEAUX.forEach(cr => {
+        html += `<tr><td class="edt-horaire">${cr}</td>`;
+        EDT_JOURS.forEach(j => {
+            const k = edtKey(j, cr);
+            const slot = grille[k];
+            if (slot) {
+                const mat = ec.matieres.find(m => m.code === slot.matiereCode);
+                const prof = ec.professeurs.find(p => p.id === slot.profId);
+                const couleur = crmAvatarColor(slot.matiereCode);
+                html += `<td class="edt-cell edt-filled" onclick="openSlotModal('${classe.id}', '${j}', '${cr}')" title="Modifier ce créneau">
+                    <span class="edt-matiere" style="background:${couleur}">${esc(mat ? mat.code : slot.matiereCode)}</span>
+                    <span class="edt-prof">${prof ? esc(prof.prenom[0] + '. ' + prof.nom) : '—'}${prof && profStatut(prof) === 'Vacataire' ? ' <em>(vac.)</em>' : ''}</span>
+                </td>`;
+            } else {
+                html += `<td class="edt-cell edt-empty" onclick="openSlotModal('${classe.id}', '${j}', '${cr}')" title="Affecter ce créneau">+</td>`;
+            }
+        });
+        html += '</tr>';
+    });
+    content.innerHTML = html + '</tbody></table></div>';
+    renderEdtCharge();
+}
+
+// Récapitulatif de la charge horaire de chaque professeur
+function renderEdtCharge() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('edtChargeContent');
+    if (ec.professeurs.length === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucun professeur enregistré.</p></div>';
+        return;
+    }
+    box.innerHTML = `<div class="table-wrapper"><table>
+        <thead><tr><th style="text-align:left;">Professeur</th><th>Statut</th><th>Heures affectées</th><th>Heures fixées / Disponibilités</th><th>Situation</th></tr></thead><tbody>` +
+        ec.professeurs.map(p => {
+            const st = profStatut(p);
+            const affectees = countProfHeures(p.id);
+            let ref, situation;
+            if (st === 'Permanent') {
+                ref = p.heuresSemaine ? p.heuresSemaine + ' h/sem fixées' : '<em>non fixées</em>';
+                if (!p.heuresSemaine) situation = '<span class="pay-badge">—</span>';
+                else if (affectees > p.heuresSemaine) situation = '<span class="pay-badge none">Dépassement</span>';
+                else if (affectees === p.heuresSemaine) situation = '<span class="pay-badge ok">Complet</span>';
+                else situation = `<span class="pay-badge partial">${p.heuresSemaine - affectees} h restantes</span>`;
+            } else {
+                const dispos = (p.disponibilites || []).length;
+                ref = dispos + ' créneau(x) disponible(s)';
+                situation = dispos === 0 ? '<span class="pay-badge none">Aucune dispo</span>'
+                    : `<span class="pay-badge ${affectees >= dispos ? 'ok' : 'partial'}">${affectees}/${dispos} utilisés</span>`;
+            }
+            return `<tr class="crm-row" onclick="openProfFiche('${p.id}')">
+                <td><span class="crm-name-cell">${crmAvatar(p.prenom, p.nom)}<span>${esc(p.prenom)} <strong>${esc(p.nom)}</strong></span></span></td>
+                <td><span class="statut-badge ${st === 'Permanent' ? 'permanent' : 'vacataire'}">${st}</span></td>
+                <td style="text-align:center;"><strong>${affectees} h</strong></td>
+                <td>${ref}</td>
+                <td>${situation}</td>
+            </tr>`;
+        }).join('') + '</tbody></table></div>';
+}
+
+function openSlotModal(classeId, jour, creneau) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) return;
+    const k = edtKey(jour, creneau);
+    const slot = (ec.emplois[classeId] || {})[k];
+    document.getElementById('slotModalTitle').textContent = `${classe.nom} — ${jour} ${creneau}`;
+    document.getElementById('slotClasseId').value = classeId;
+    document.getElementById('slotJour').value = jour;
+    document.getElementById('slotCreneau').value = creneau;
+    document.getElementById('slotMatiere').innerHTML = ec.matieres.map(m =>
+        `<option value="${esc(m.code)}"${slot && slot.matiereCode === m.code ? ' selected' : ''}>${esc(m.nom)}</option>`).join('');
+    // Professeurs : les vacataires indisponibles et les profs déjà occupés sont désactivés
+    const opts = ec.professeurs.map(p => {
+        const st = profStatut(p);
+        let label = p.prenom + ' ' + p.nom + (st === 'Vacataire' ? ' (vacataire)' : '');
+        let disabled = '';
+        if (st === 'Vacataire' && !(p.disponibilites || []).includes(k)) {
+            label += ' — indisponible sur ce créneau'; disabled = ' disabled';
+        } else {
+            const ou = profOccupeAilleurs(p.id, k, classeId);
+            if (ou) { label += ` — occupé (${ou})`; disabled = ' disabled'; }
+            else if (st === 'Permanent' && p.heuresSemaine && countProfHeures(p.id) >= p.heuresSemaine && !(slot && slot.profId === p.id)) {
+                label += ` — quota atteint (${p.heuresSemaine} h)`;
+            }
+        }
+        return `<option value="${p.id}"${slot && slot.profId === p.id ? ' selected' : ''}${disabled}>${esc(label)}</option>`;
+    });
+    document.getElementById('slotProf').innerHTML = '<option value="">— Choisir un professeur —</option>' + opts.join('');
+    document.getElementById('slotInfo').textContent = slot ? 'Ce créneau est déjà affecté : modifiez-le ou libérez-le.' : '';
+    document.getElementById('slotModal').classList.add('show');
+}
+
+function saveSlot() {
+    const ec = getEcoleData();
+    const classeId = document.getElementById('slotClasseId').value;
+    const k = edtKey(document.getElementById('slotJour').value, document.getElementById('slotCreneau').value);
+    const profId = document.getElementById('slotProf').value;
+    const matiereCode = document.getElementById('slotMatiere').value;
+    if (!profId) { toast('Choisissez un professeur.', 'warning'); return; }
+    const prof = ec.professeurs.find(p => p.id === profId);
+    if (!prof) return;
+    // Revalidation (la situation peut avoir changé depuis l'ouverture du modal)
+    if (profStatut(prof) === 'Vacataire' && !(prof.disponibilites || []).includes(k)) {
+        toast(`${prof.prenom} ${prof.nom} (vacataire) n'est pas disponible sur ce créneau.`, 'error', 5000);
+        return;
+    }
+    const ou = profOccupeAilleurs(profId, k, classeId);
+    if (ou) { toast(`${prof.prenom} ${prof.nom} est déjà occupé(e) sur ce créneau (${ou}).`, 'error', 5000); return; }
+    if (!ec.emplois[classeId]) ec.emplois[classeId] = {};
+    const dejaCeSlot = ec.emplois[classeId][k] && ec.emplois[classeId][k].profId === profId;
+    if (profStatut(prof) === 'Permanent' && prof.heuresSemaine && !dejaCeSlot && countProfHeures(profId) >= prof.heuresSemaine) {
+        toast(`Attention : ${prof.prenom} ${prof.nom} dépasse ses ${prof.heuresSemaine} h fixées.`, 'warning', 5000);
+    }
+    ec.emplois[classeId][k] = { matiereCode: matiereCode, profId: profId };
+    saveData();
+    logActivity(`EDT : ${k.replace('|', ' ')} affecté à ${prof.prenom} ${prof.nom} (${matiereCode})`, 'config');
+    toast('Créneau affecté.', 'success');
+    closeModal('slotModal');
+    renderEmploiTempsPage();
+}
+
+function clearSlot() {
+    const ec = getEcoleData();
+    const classeId = document.getElementById('slotClasseId').value;
+    const k = edtKey(document.getElementById('slotJour').value, document.getElementById('slotCreneau').value);
+    if (ec.emplois[classeId]) delete ec.emplois[classeId][k];
+    saveData();
+    toast('Créneau libéré.', 'info');
+    closeModal('slotModal');
+    renderEmploiTempsPage();
+}
+
+function imprimerEmploiTemps(classeId) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) return;
+    const grille = ec.emplois[classeId] || {};
+    let html = docHeader('EMPLOI DU TEMPS', `Année scolaire ${appData.year} — ${esc(classe.nom)} (${esc(classe.niveau)})`);
+    html += '<table><thead><tr><th>Horaire</th>' + EDT_JOURS.map(j => `<th>${j}</th>`).join('') + '</tr></thead><tbody>';
+    EDT_CRENEAUX.forEach(cr => {
+        html += `<tr><td><b>${cr}</b></td>`;
+        EDT_JOURS.forEach(j => {
+            const slot = grille[edtKey(j, cr)];
+            if (slot) {
+                const mat = ec.matieres.find(m => m.code === slot.matiereCode);
+                const prof = ec.professeurs.find(p => p.id === slot.profId);
+                html += `<td style="text-align:center;"><b>${esc(mat ? mat.nom : slot.matiereCode)}</b><br><span style="font-size:0.85em;">${prof ? esc(prof.prenom[0] + '. ' + prof.nom) : ''}</span></td>`;
+            } else {
+                html += '<td></td>';
+            }
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('printModalTitle').textContent = `Emploi du temps — ${classe.nom}`;
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity(`Emploi du temps imprimé : ${classe.nom}`, 'export');
 }
 
 // ---------- Matières des bulletins (Mon École) ----------

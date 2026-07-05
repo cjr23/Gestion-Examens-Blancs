@@ -217,6 +217,10 @@
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3h6v8h-6z" fill="none"/><path d="M19 3v8"/></svg></span>
                     <span class="nav-text">Professeurs</span>
                 </button>
+                <button onclick="showPage('emploiTemps', this)" data-page="emploiTemps" data-label="Emplois du temps">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+                    <span class="nav-text">Emplois du temps</span>
+                </button>
             </div>
         </div>
 
@@ -647,6 +651,24 @@
         </div>
     </div>
 
+    <!-- EMPLOI DU TEMPS PAGE (École) -->
+    <div class="page" id="page-emploiTemps">
+        <div class="card">
+            <h2>Emplois du temps</h2>
+            <div class="alert alert-info" style="font-size:0.85em;">Cliquez sur un créneau pour affecter une matière et un professeur. Les <strong>vacataires</strong> ne peuvent être placés que sur leurs créneaux de disponibilité (à cocher dans leur fiche) ; les <strong>permanents</strong> ont un volume d'heures hebdomadaire à respecter.</div>
+            <div class="form-row no-print">
+                <div class="form-group"><label>Classe</label>
+                    <select id="edtClasseSelect" style="width:240px;" onchange="renderEmploiTempsPage()"></select>
+                </div>
+            </div>
+            <div id="edtContent"></div>
+        </div>
+        <div class="card">
+            <h2>Charge horaire des professeurs</h2>
+            <div id="edtChargeContent"></div>
+        </div>
+    </div>
+
     <!-- PERSONNEL PAGE (Administration) -->
     <div class="page" id="page-personnel">
         <div class="card">
@@ -993,10 +1015,18 @@
         <div class="form-group"><label>Nom</label><input type="text" id="profNom"></div>
         <div class="form-group"><label>Matière enseignée</label><input type="text" id="profMatiere" placeholder="ex : Mathématiques"></div>
         <div class="form-group"><label>Statut</label>
-            <select id="profStatut" style="width:100%;">
+            <select id="profStatut" style="width:100%;" onchange="toggleProfStatutFields()">
                 <option value="Permanent">Professeur permanent</option>
                 <option value="Vacataire">Professeur vacataire</option>
             </select>
+        </div>
+        <div class="form-group" id="profHeuresGroup">
+            <label>Heures de cours fixées (par semaine)</label>
+            <input type="number" id="profHeures" min="0" max="40" placeholder="ex : 18">
+        </div>
+        <div class="form-group" id="profDispoGroup" style="display:none;">
+            <label>Disponibilités (créneaux où le vacataire peut enseigner)</label>
+            <div id="profDispoGrid" class="dispo-grid"></div>
         </div>
         <div class="form-group"><label>Téléphone (optionnel)</label><input type="text" id="profTel"></div>
         <div class="form-group"><label>Email (optionnel)</label><input type="email" id="profEmail"></div>
@@ -1093,6 +1123,24 @@
         <div class="modal-actions">
             <button class="btn btn-danger" onclick="closeModal('depenseModal')">Annuler</button>
             <button class="btn btn-success" onclick="saveDepense()">Sauvegarder</button>
+        </div>
+    </div>
+</div>
+
+<!-- CRENEAU EMPLOI DU TEMPS MODAL -->
+<div class="modal-overlay" id="slotModal">
+    <div class="modal">
+        <h3 id="slotModalTitle">Affecter un créneau</h3>
+        <input type="hidden" id="slotClasseId" value="">
+        <input type="hidden" id="slotJour" value="">
+        <input type="hidden" id="slotCreneau" value="">
+        <div class="form-group"><label>Matière</label><select id="slotMatiere" style="width:100%;"></select></div>
+        <div class="form-group"><label>Professeur</label><select id="slotProf" style="width:100%;"></select></div>
+        <p id="slotInfo" style="font-size:0.82em; color:var(--text-secondary); margin:6px 0 0;"></p>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="clearSlot()">Libérer le créneau</button>
+            <button class="btn btn-danger" onclick="closeModal('slotModal')">Annuler</button>
+            <button class="btn btn-success" onclick="saveSlot()">Affecter</button>
         </div>
     </div>
 </div>
