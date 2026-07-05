@@ -262,7 +262,11 @@ function applyRoleAccess(role) {
         const navBtns = document.querySelectorAll('#mainNav button');
         navBtns.forEach(btn => {
             const t = btn.textContent.trim();
-            if (t === 'Paramètres' || t === 'Journal' || t === 'Tableau de Bord') btn.style.display = 'none';
+            // dataset.roleHidden : syncModuleUI ne doit pas réafficher ces boutons
+            if (t === 'Paramètres' || t === 'Journal' || t === 'Tableau de Bord') {
+                btn.dataset.roleHidden = '1';
+                btn.style.display = 'none';
+            }
         });
         const backupBtn = document.querySelector('.btn-outline[onclick*="showBackupModal"]');
         if (backupBtn) backupBtn.style.display = 'none';
@@ -565,6 +569,50 @@ const LEVELS = {
 
 let currentLevel = 'bfem3';
 let currentPage = 'dashboard';
+// ========== MODULES (structure CRM multi-espaces) ==========
+// Chaque module a sa propre navigation ; les pages "Système" sont communes.
+const MODULES = {
+    examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'professeurs'] },
+    admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
+    compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'paiements', 'depenses'] }
+};
+const SYSTEM_PAGES = ['journal', 'aichat', 'config'];
+let currentModule = 'examens';
+const CLASSE_NIVEAUX = ['6ème', '5ème', '4ème', '3ème', 'Seconde', 'Première', 'Terminale'];
+
+// Deux cycles pédagogiques, chacun géré par un préfet ;
+// le directeur gère l'ensemble de l'établissement.
+const CYCLES = {
+    moyen:      { label: 'Cycle Moyen',      sub: '6ème – 3ème',         niveaux: ['6ème', '5ème', '4ème', '3ème'] },
+    secondaire: { label: 'Cycle Secondaire', sub: 'Seconde – Terminale', niveaux: ['Seconde', 'Première', 'Terminale'] }
+};
+
+function cycleOfNiveau(niveau) {
+    return CYCLES.moyen.niveaux.includes(niveau) ? 'moyen' : 'secondaire';
+}
+
+function moduleOfPage(pageId) {
+    return Object.keys(MODULES).find(m => MODULES[m].pages.includes(pageId)) || null;
+}
+
+// Met à jour le commutateur + la visibilité des boutons de nav, sans naviguer
+function syncModuleUI(m) {
+    if (!MODULES[m]) m = 'examens';
+    currentModule = m;
+    try { localStorage.setItem('examBlanc_module', m); } catch(e) {}
+    document.querySelectorAll('#moduleSwitcher button').forEach(b => b.classList.toggle('active', b.dataset.module === m));
+    // Uniquement les boutons de navigation directs : ceux du commutateur
+    // (.module-switcher) portent aussi data-module et doivent rester visibles.
+    document.querySelectorAll('#mainNav > button[data-module]').forEach(el => {
+        el.style.display = (el.dataset.module === m && !el.dataset.roleHidden) ? '' : 'none';
+    });
+}
+
+function showModule(m) {
+    syncModuleUI(m);
+    showPage(MODULES[currentModule].home);
+}
 
 let appData = {
     year: '2025-2026',
@@ -640,12 +688,19 @@ function showPage(pageId) {
         pageId = 'students';
     }
     currentPage = pageId;
+    // Si la page appartient à un autre module, on bascule le commutateur en conséquence
+    const mod = moduleOfPage(pageId);
+    if (mod && mod !== currentModule) syncModuleUI(mod);
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('#mainNav button').forEach(b => b.classList.remove('active'));
+    // Boutons de nav directs uniquement (pas ceux du commutateur de modules)
+    document.querySelectorAll('#mainNav > button').forEach(b => b.classList.remove('active'));
     document.getElementById('page-' + pageId).classList.add('active');
-    const pages = ['dashboard','students','grades1','results1','grades2','results2','stats','documents','journal','aichat','config'];
-    const idx = pages.indexOf(pageId);
-    if (idx >= 0) document.querySelectorAll('#mainNav button')[idx].classList.add('active');
+    const navBtn = document.querySelector(`#mainNav button[data-page="${pageId}"]`);
+    if (navBtn) navBtn.classList.add('active');
+    // La barre NIVEAU (3ème / Tle S / Tle L2) ne concerne que le module Examens
+    // (et les pages Système qui l'utilisaient déjà).
+    const levelBar = document.querySelector('.level-bar');
+    if (levelBar) levelBar.style.display = (mod === null || mod === 'examens') ? '' : 'none';
     if (window.innerWidth <= 900) { document.getElementById('sidebar')?.classList.remove('open'); document.getElementById('sidebarBackdrop')?.classList.remove('show'); }
     refreshCurrentPage();
 }
@@ -662,6 +717,13 @@ function refreshCurrentPage() {
     if (currentPage === 'documents') {}
     if (currentPage === 'journal') renderJournal();
     if (currentPage === 'config') renderConfigPage();
+    if (currentPage === 'ecole') renderEcolePage();
+    if (currentPage === 'classes') renderClassesPage();
+    if (currentPage === 'professeurs') renderProfsTable();
+    if (currentPage === 'personnel') renderPersonnelTable();
+    if (currentPage === 'compta') renderComptaDashboard();
+    if (currentPage === 'paiements') renderPaiementsPage();
+    if (currentPage === 'depenses') renderDepensesPage();
 }
 
 // ========== STUDENTS ==========
@@ -781,7 +843,7 @@ function saveStudent() {
     if (!nomCheck.ok) { toast(nomCheck.error, 'error', 5000); return; }
     const prenom = prenomCheck.value;
     const nom = nomCheck.value.toUpperCase();
-    const duplicate = ld.students.findIndex((s, i) => s.numTable === numTable && i !== idx);
+    const duplicate = ld.students.findIndex((s, i) => s && s.numTable === numTable && i !== idx);
     if (duplicate !== -1) { toast(`Le numéro de table ${numTable} est déjà attribué à ${ld.students[duplicate].prenom} ${ld.students[duplicate].nom}.`, 'warning', 5000); return; }
     if (idx === -1) {
         ld.students.push({ numTable, prenom, nom, anonymat: '', sexe: selectedSexe });
@@ -829,10 +891,16 @@ function deleteStudent(idx) {
 // is ALWAYS alphabetical (this is the "liste de classe" used as reference).
 function sortStudentsAlpha(ld) {
     ld = ld || getLevelData();
+    // Robustesse : une entrée null/corrompue ou un nom non-textuel (sauvegarde JSON
+    // restaurée à la main, localStorage abîmé) faisait planter le comparateur. Le tri
+    // était alors ABANDONNÉ : la liste restait dans l'ordre d'insertion et chaque nouvel
+    // élève s'empilait en bas au lieu de se placer alphabétiquement. On purge donc les
+    // entrées invalides et on force les clés de tri en chaîne pour ne jamais lever d'exception.
+    ld.students = (ld.students || []).filter(s => s && typeof s === 'object');
     ld.students.sort((a, b) => {
-        const nomCmp = (a.nom || '').localeCompare(b.nom || '', 'fr', { sensitivity: 'base' });
+        const nomCmp = String(a.nom || '').localeCompare(String(b.nom || ''), 'fr', { sensitivity: 'base' });
         if (nomCmp !== 0) return nomCmp;
-        return (a.prenom || '').localeCompare(b.prenom || '', 'fr', { sensitivity: 'base' });
+        return String(a.prenom || '').localeCompare(String(b.prenom || ''), 'fr', { sensitivity: 'base' });
     });
 }
 
@@ -1987,6 +2055,79 @@ function printDocument(type) {
         </div>`;
     }
 
+    // ===== RÉSULTATS COMPLETS (1er Tour) — équivalent papier de l'export Excel =====
+    if (type === 'resultats1') {
+        modalTitle.textContent = 'Résultats complets (1er Tour)';
+        if (!ld.results1 || ld.results1.length === 0) { toast('Veuillez d\'abord calculer les résultats du 1er tour.', 'warning'); return; }
+        const showMentionR = currentLevel !== 'bfem3';
+        const decColor = d => d === 'Admis' ? '#10b981' : d === '2ème Tour' ? '#f59e0b' : d === 'Ajourné' ? '#ef4444' : '#3E2415';
+        const sorted = [...ld.results1].sort((a, b) => a.rang - b.rang);
+        html = docHeader('RÉSULTATS DU 1er TOUR', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
+        let thead = '<table style="font-size:0.8em;"><thead><tr><th>N Tab</th><th>Prénom(s)</th><th>Nom</th>';
+        ld.subjects.forEach(s => { thead += `<th>${Security.escapeHTML(s.name)}<br><small>(${s.coef})</small></th>`; });
+        thead += '<th>Total</th><th>Moy.</th><th>Rang</th><th>Décision</th>' + (showMentionR ? '<th>Mention</th>' : '') + '</tr></thead><tbody>';
+        html += thead;
+        sorted.forEach(r => {
+            html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td>`;
+            ld.subjects.forEach(sub => {
+                const g = ld.grades1[r.key] && ld.grades1[r.key][sub.code];
+                let v = '';
+                if (g === 'ABS') v = 'ABS'; else if (g === 'INAPTE') v = 'INAPTE'; else if (g !== undefined && g !== '') v = g;
+                html += `<td>${Security.escapeHTML(v)}</td>`;
+            });
+            html += `<td>${r.total}</td><td><b>${r.moyenne.toFixed(2)}</b></td><td>${r.rang}</td><td style="color:${decColor(r.decision)}; font-weight:700;">${Security.escapeHTML(r.decision)}</td>`;
+            if (showMentionR) html += `<td>${Security.escapeHTML(r.mention || '')}</td>`;
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        const a1 = sorted.filter(r => r.decision === 'Admis').length;
+        const t2 = sorted.filter(r => r.decision === '2ème Tour').length;
+        const aj = sorted.filter(r => r.decision === 'Ajourné').length;
+        html += `<p style="margin-top:8px;"><b>Présents :</b> ${sorted.length} &nbsp;—&nbsp; <b>Admis :</b> ${a1} &nbsp;—&nbsp; <b>2ème Tour :</b> ${t2} &nbsp;—&nbsp; <b>Ajournés :</b> ${aj}</p>`;
+    }
+
+    // ===== CLASSEMENT PAR ORDRE DE MÉRITE =====
+    if (type === 'classement') {
+        modalTitle.textContent = 'Classement par mérite';
+        if (!ld.results1 || ld.results1.length === 0) { toast('Veuillez d\'abord calculer les résultats.', 'warning'); return; }
+        const showMentionC = currentLevel !== 'bfem3';
+        const decColorC = d => d === 'Admis' ? '#10b981' : d === '2ème Tour' ? '#f59e0b' : d === 'Ajourné' ? '#ef4444' : '#3E2415';
+        const ranked = [...ld.results1].sort((a, b) => b.moyenne - a.moyenne);
+        html = docHeader('CLASSEMENT PAR ORDRE DE MÉRITE', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
+        html += `<table><thead><tr><th>Rang</th><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Moyenne</th><th>Décision</th>${showMentionC ? '<th>Mention</th>' : ''}</tr></thead><tbody>`;
+        ranked.forEach((r, i) => {
+            html += `<tr><td><b>${i + 1}</b></td><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td><td><b>${r.moyenne.toFixed(2)}</b></td><td style="color:${decColorC(r.decision)}; font-weight:700;">${Security.escapeHTML(r.decision)}</td>${showMentionC ? `<td>${Security.escapeHTML(r.mention || '')}</td>` : ''}</tr>`;
+        });
+        html += `</tbody></table><p><b>Total classés : ${ranked.length}</b></p>`;
+    }
+
+    // ===== CANDIDATS CONVOQUÉS AU 2ème TOUR =====
+    if (type === 'convoques2e') {
+        modalTitle.textContent = 'Convoqués au 2ème Tour';
+        const conv = (ld.results1 || []).filter(r => r.decision === '2ème Tour')
+            .sort((a, b) => (a.student.nom || '').localeCompare(b.student.nom || '', 'fr', { sensitivity: 'base' }));
+        if (conv.length === 0) { toast('Aucun candidat convoqué au 2ème tour (calculez d\'abord les résultats).', 'warning'); return; }
+        html = docHeader('CANDIDATS CONVOQUÉS AU 2ème TOUR', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
+        html += `<table><thead><tr><th>N°</th><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Moyenne 1er Tour</th></tr></thead><tbody>`;
+        conv.forEach((r, i) => html += `<tr><td>${i + 1}</td><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td><td>${r.moyenne.toFixed(2)}</td></tr>`);
+        html += `</tbody></table><p><b>Total convoqués : ${conv.length}</b></p>`;
+    }
+
+    // ===== AJOURNÉS / ÉCHECS (définitifs : ajournés 1er tour + non-admis du 2ème tour) =====
+    if (type === 'ajournes') {
+        modalTitle.textContent = 'Ajournés';
+        if (!ld.results1 || ld.results1.length === 0) { toast('Veuillez d\'abord calculer les résultats.', 'warning'); return; }
+        const aj1 = ld.results1.filter(r => r.decision === 'Ajourné').map(r => ({ st: r.student, moy: r.moyenne, src: '1er Tour' }));
+        const aj2 = (ld.results2 || []).filter(r => r.decision !== 'Admis').map(r => ({ st: r.student, moy: r.moyenne, src: '2ème Tour' }));
+        const ajournes = [...aj1, ...aj2].sort((a, b) => (a.st.nom || '').localeCompare(b.st.nom || '', 'fr', { sensitivity: 'base' }));
+        if (ajournes.length === 0) { toast('Aucun ajourné.', 'info'); return; }
+        const has2 = aj2.length > 0;
+        html = docHeader('LISTE DES AJOURNÉS', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
+        html += `<table><thead><tr><th>N°</th><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Moyenne</th>${has2 ? '<th>Échec après</th>' : ''}</tr></thead><tbody>`;
+        ajournes.forEach((a, i) => html += `<tr><td>${i + 1}</td><td>${a.st.numTable}</td><td style="text-align:left;">${Security.escapeHTML(a.st.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(a.st.nom)}</td><td>${a.moy.toFixed(2)}</td>${has2 ? `<td>${a.src}</td>` : ''}</tr>`);
+        html += `</tbody></table><p><b>Total ajournés : ${ajournes.length}</b></p>`;
+    }
+
     if (school.prefet || school.principal) {
         html += `<div style="margin-top:30px; display:flex; justify-content:space-between; padding:0 40px;">`;
         if (school.prefet) {
@@ -2015,6 +2156,7 @@ function exportAllToExcel() {
     // Échappe le texte injecté dans le XML : un '&', '<' ou '>' (nom de matière
     // personnalisé, ou nom restauré d'une ancienne sauvegarde) corromprait le fichier.
     const xmlEsc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;' }[c]));
+    const school = appData.school || {};
 
     Object.keys(LEVELS).forEach(lv => {
         const d = appData.levels[lv];
@@ -2024,7 +2166,15 @@ function exportAllToExcel() {
         const showMention = lv !== 'bfem3';
 
         let rows = '';
-        // Header row
+        // En-tête établissement — même présentation que les documents de l'app
+        // (docHeader). Le logo n'est pas intégrable dans ce format XML : en-tête textuel.
+        rows += `<Row><Cell><Data ss:Type="String">${xmlEsc(school.name || '')}</Data></Cell></Row>`;
+        rows += `<Row><Cell><Data ss:Type="String">${xmlEsc('IA: ' + (school.ia || '') + '   IEF: ' + (school.ief || '') + '   Année: ' + (appData.year || ''))}</Data></Cell></Row>`;
+        rows += `<Row><Cell><Data ss:Type="String">${xmlEsc(c.examLabel + ' - ' + c.className)}</Data></Cell></Row>`;
+        if (school.dates) rows += `<Row><Cell><Data ss:Type="String">${xmlEsc('Session: ' + school.dates)}</Data></Cell></Row>`;
+        rows += `<Row><Cell><Data ss:Type="String">RÉSULTATS DU 1er TOUR</Data></Cell></Row>`;
+        rows += '<Row></Row>';
+        // Header row (colonnes)
         let headerCells = '<Cell><Data ss:Type="String">N Tab</Data></Cell><Cell><Data ss:Type="String">Prénom</Data></Cell><Cell><Data ss:Type="String">Nom</Data></Cell>';
         d.subjects.forEach(s => { headerCells += `<Cell><Data ss:Type="String">${xmlEsc(s.name)} (${s.coef})</Data></Cell>`; });
         headerCells += '<Cell><Data ss:Type="String">Total</Data></Cell><Cell><Data ss:Type="String">Moyenne</Data></Cell><Cell><Data ss:Type="String">Rang</Data></Cell><Cell><Data ss:Type="String">Décision</Data></Cell>';
@@ -2062,6 +2212,14 @@ function exportAllToExcel() {
         rows += `<Row><Cell><Data ss:Type="String">Ajournés</Data></Cell><Cell><Data ss:Type="Number">${aj}</Data></Cell></Row>`;
         if (a2 > 0) rows += `<Row><Cell><Data ss:Type="String">Admis 2ème Tour</Data></Cell><Cell><Data ss:Type="Number">${a2}</Data></Cell></Row>`;
         rows += `<Row><Cell><Data ss:Type="String">TOTAL ADMIS</Data></Cell><Cell><Data ss:Type="Number">${a1 + a2}</Data></Cell></Row>`;
+
+        // Administration / signataires en bas de page (comme le pied des documents).
+        rows += '<Row></Row><Row></Row>';
+        rows += `<Row><Cell><Data ss:Type="String">${xmlEsc('Fait à ' + (school.ia || 'Tambacounda') + ', le ____________________')}</Data></Cell></Row>`;
+        rows += '<Row></Row>';
+        // Préfet à gauche, Directeur à droite — même ordre que le pied des documents imprimés.
+        rows += `<Row><Cell><Data ss:Type="String">Le Préfet</Data></Cell><Cell ss:Index="4"><Data ss:Type="String">Le Directeur</Data></Cell></Row>`;
+        rows += `<Row><Cell><Data ss:Type="String">${xmlEsc(school.prefet || '')}</Data></Cell><Cell ss:Index="4"><Data ss:Type="String">${xmlEsc(school.principal || '')}</Data></Cell></Row>`;
 
         const sheetName = c.shortLabel.replace(/[^a-zA-Z0-9 ]/g, '');
         sheets += `<Worksheet ss:Name="${sheetName}"><Table>${rows}</Table></Worksheet>`;
@@ -2103,6 +2261,7 @@ function importBackupJSON(input) {
             if (!data.levels && !data.school) { toast('Fichier de sauvegarde invalide.', 'error'); return; }
             showConfirm('Restaurer la sauvegarde ?', 'Toutes les données actuelles seront remplacées par celles de la sauvegarde.', () => {
                 Object.assign(appData, data);
+                sanitizeStudents();
                 saveData();
                 populateYearSelect();
                 updateLevelTags();
@@ -2132,6 +2291,23 @@ function confirmResetData() {
 // ========== PERSISTENCE ==========
 function saveData() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); } catch(e) { toast('Erreur de sauvegarde !', 'error'); } }
 function loadData() { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { Object.assign(appData, JSON.parse(s)); return true; } } catch(e) {} return false; }
+
+// Purge les entrées d'élèves invalides (null/non-objet) et force nom/prénom en texte.
+// De telles entrées peuvent provenir d'une sauvegarde JSON restaurée à la main ou d'un
+// localStorage abîmé ; elles faisaient planter l'ajout (vérif doublons sur s.numTable)
+// et le tri (s.nom.localeCompare), ce qui laissait la liste bloquée et tout nouvel élève
+// empilé en bas. À appeler après tout chargement de données.
+function sanitizeStudents() {
+    Object.keys(appData.levels || {}).forEach(lv => {
+        const d = appData.levels[lv];
+        if (!d || !Array.isArray(d.students)) return;
+        d.students = d.students.filter(s => s && typeof s === 'object');
+        d.students.forEach(s => {
+            if (typeof s.nom !== 'string') s.nom = s.nom == null ? '' : String(s.nom);
+            if (typeof s.prenom !== 'string') s.prenom = s.prenom == null ? '' : String(s.prenom);
+        });
+    });
+}
 
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); }));
@@ -2527,10 +2703,19 @@ function init() {
     loadTheme();
     loadSidebarState();
     loadData();
+    sanitizeStudents();
+    ensureEleveIds();
     checkSession();
     populateYearSelect();
     updateLevelTags();
     renderDashboard();
+    // Restaure le dernier module utilisé (structure CRM multi-espaces)
+    const savedModule = localStorage.getItem('examBlanc_module') || 'examens';
+    if (savedModule !== 'examens' && MODULES[savedModule]) {
+        showModule(savedModule);
+    } else {
+        syncModuleUI('examens');
+    }
 }
 init();
 
@@ -4534,4 +4719,1217 @@ function closePresentationMode() {
     if (_presentationKeyHandler) document.removeEventListener('keydown', _presentationKeyHandler);
     if (_presentationAutoplayTimer) clearInterval(_presentationAutoplayTimer);
     _presentationAutoplay = false;
+}
+
+// ================================================================
+// ========== MODULE ÉCOLE (école, classes, professeurs) ==========
+// ================================================================
+
+function getEcoleData() {
+    if (!appData.ecole) {
+        appData.ecole = {
+            infos: { nom: (appData.school && appData.school.name) || '', adresse: '', telephone: '', email: '', bp: '', devise: '' },
+            classes: [],
+            professeurs: []
+        };
+    }
+    // Rétro-compatibilité si une sauvegarde partielle est importée
+    if (!appData.ecole.infos) appData.ecole.infos = { nom: '', adresse: '', telephone: '', email: '', bp: '', devise: '' };
+    if (!Array.isArray(appData.ecole.classes)) appData.ecole.classes = [];
+    if (!Array.isArray(appData.ecole.professeurs)) appData.ecole.professeurs = [];
+    // Direction : un préfet par cycle, un directeur pour l'établissement
+    if (!appData.ecole.direction) appData.ecole.direction = { directeur: '', prefetMoyen: '', prefetSecondaire: '' };
+    return appData.ecole;
+}
+
+function ecoleUid(prefix) {
+    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function formatDateNaissanceFR(iso) {
+    // 'AAAA-MM-JJ' (input date) -> 'JJ/MM/AAAA'
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '—';
+    return iso.split('-').reverse().join('/');
+}
+
+// ---------- Avatars (initiales colorées, façon CRM) ----------
+const CRM_AVATAR_COLORS = ['#8d7a4e', '#5a6b4a', '#6b4a5a', '#4a5a6b', '#7a5a3e', '#4e6b62', '#6b5e4a', '#54486b'];
+
+function crmAvatarColor(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return CRM_AVATAR_COLORS[h % CRM_AVATAR_COLORS.length];
+}
+
+function crmAvatar(prenom, nom, size) {
+    const initiales = ((prenom || ' ')[0] + (nom || ' ')[0]).toUpperCase();
+    const color = crmAvatarColor((prenom || '') + (nom || ''));
+    return `<span class="crm-avatar${size ? ' ' + size : ''}" style="background:${color}">${Security.escapeHTML(initiales)}</span>`;
+}
+
+// ---------- Page École (vue d'ensemble CRM) ----------
+function renderEcolePage() {
+    const ec = getEcoleData();
+    document.getElementById('ecoleNom').value = ec.infos.nom || '';
+    document.getElementById('ecoleTel').value = ec.infos.telephone || '';
+    document.getElementById('ecoleEmail').value = ec.infos.email || '';
+    document.getElementById('ecoleAdresse').value = ec.infos.adresse || '';
+    document.getElementById('ecoleBP').value = ec.infos.bp || '';
+    document.getElementById('ecoleDevise').value = ec.infos.devise || '';
+    document.getElementById('dirDirecteur').value = ec.direction.directeur || '';
+    document.getElementById('dirPrefetMoyen').value = ec.direction.prefetMoyen || '';
+    document.getElementById('dirPrefetSecondaire').value = ec.direction.prefetSecondaire || '';
+    const totalEleves = ec.classes.reduce((s, c) => s + c.eleves.length, 0);
+    const elevesCycle = cy => ec.classes.filter(c => cycleOfNiveau(c.niveau) === cy).reduce((s, c) => s + c.eleves.length, 0);
+    const nbPerm = ec.professeurs.filter(p => (p.statut || 'Permanent') === 'Permanent').length;
+    const nbVac = ec.professeurs.length - nbPerm;
+    document.getElementById('ecoleStats').innerHTML = `
+        <div class="stat-card blue"><div class="number">${ec.classes.length}</div><div class="label">Classes</div></div>
+        <div class="stat-card green"><div class="number">${totalEleves}</div><div class="label">Élèves</div></div>
+        <div class="stat-card blue"><div class="number">${elevesCycle('moyen')}</div><div class="label">Cycle Moyen (6e–3e)</div></div>
+        <div class="stat-card blue"><div class="number">${elevesCycle('secondaire')}</div><div class="label">Cycle Secondaire (2nde–Tle)</div></div>
+        <div class="stat-card orange"><div class="number">${ec.professeurs.length}</div><div class="label">Professeurs</div><div class="pct">${nbPerm} perm. · ${nbVac} vac.</div></div>`;
+    renderEcoleNiveaux(ec);
+    renderEcoleActivite();
+}
+
+function saveDirection() {
+    const ec = getEcoleData();
+    ec.direction.directeur = document.getElementById('dirDirecteur').value.trim();
+    ec.direction.prefetMoyen = document.getElementById('dirPrefetMoyen').value.trim();
+    ec.direction.prefetSecondaire = document.getElementById('dirPrefetSecondaire').value.trim();
+    saveData();
+    logActivity('Direction de l\'école mise à jour', 'config');
+    toast('Direction sauvegardée.', 'success');
+}
+
+function renderEcoleNiveaux(ec) {
+    const box = document.getElementById('ecoleNiveaux');
+    const esc = Security.escapeHTML;
+    if (ec.classes.length === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucune classe pour le moment.</p></div>';
+        return;
+    }
+    const max = Math.max(...CLASSE_NIVEAUX.map(niv =>
+        ec.classes.filter(c => c.niveau === niv).reduce((s, c) => s + c.eleves.length, 0)), 1);
+    let html = '';
+    Object.keys(CYCLES).forEach(cy => {
+        const cycle = CYCLES[cy];
+        const counts = cycle.niveaux.map(niv => {
+            const classes = ec.classes.filter(c => c.niveau === niv);
+            return { niv: niv, classes: classes.length, eleves: classes.reduce((s, c) => s + c.eleves.length, 0) };
+        }).filter(x => x.classes > 0);
+        if (counts.length === 0) return;
+        const totalCycle = counts.reduce((s, x) => s + x.eleves, 0);
+        html += `<div class="crm-bar-group-title">${cycle.label} <span>${totalCycle} élève(s)</span></div>`;
+        html += counts.map(x => `
+            <div class="crm-bar-row">
+                <span class="crm-bar-label">${esc(x.niv)}</span>
+                <div class="crm-bar-track"><div class="crm-bar-fill" style="width:${Math.max(4, Math.round(x.eleves / max * 100))}%"></div></div>
+                <span class="crm-bar-value">${x.eleves} élève(s) · ${x.classes} classe(s)</span>
+            </div>`).join('');
+    });
+    box.innerHTML = html;
+}
+
+// Mots-clés des messages du journal qui concernent le module École
+const ECOLE_LOG_RX = /classe|élève (ajouté|modifié|supprimé)|professeur|école/i;
+
+function renderEcoleActivite() {
+    const box = document.getElementById('ecoleActivite');
+    const logs = getActivityLog().filter(l => ECOLE_LOG_RX.test(l.message)).slice(0, 8);
+    if (logs.length === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucune activité pour le moment.</p></div>';
+        return;
+    }
+    box.innerHTML = '<div class="crm-activity">' + logs.map(l => `
+        <div class="crm-activity-item">
+            <span class="crm-activity-dot"></span>
+            <div>
+                <div class="crm-activity-msg">${Security.escapeHTML(l.message)}</div>
+                <div class="crm-activity-time">${formatLogDate(l.date)}</div>
+            </div>
+        </div>`).join('') + '</div>';
+}
+
+function saveEcoleInfos() {
+    const ec = getEcoleData();
+    ec.infos.nom = document.getElementById('ecoleNom').value.trim();
+    ec.infos.telephone = document.getElementById('ecoleTel').value.trim();
+    ec.infos.email = document.getElementById('ecoleEmail').value.trim();
+    ec.infos.adresse = document.getElementById('ecoleAdresse').value.trim();
+    ec.infos.bp = document.getElementById('ecoleBP').value.trim();
+    ec.infos.devise = document.getElementById('ecoleDevise').value.trim();
+    saveData();
+    logActivity('Informations de l\'école mises à jour', 'config');
+    toast('Informations de l\'école sauvegardées.', 'success');
+}
+
+// ---------- Classes ----------
+// null = liste des classes ; id = fiche détaillée d'une classe (ses élèves)
+let currentClasseId = null;
+
+function renderClassesPage() {
+    const ec = getEcoleData();
+    const classe = currentClasseId ? ec.classes.find(c => c.id === currentClasseId) : null;
+    if (classe) { renderClasseDetail(classe); return; }
+    currentClasseId = null;
+    document.getElementById('classesTitle').textContent = 'Gestion des Classes';
+    const esc = Security.escapeHTML;
+    let html = `<div class="btn-group no-print">
+        <button class="btn btn-primary" onclick="showAddClasseModal()">+ Ajouter une classe</button>
+        <button class="btn btn-success" onclick="showAddEleveModal()">+ Inscrire un élève</button>
+    </div>`;
+    if (ec.classes.length === 0) {
+        html += '<div class="empty-state"><p>Aucune classe pour le moment. Cliquez sur « + Ajouter une classe » : elle sera automatiquement rangée dans son cycle (Moyen ou Secondaire).</p></div>';
+    } else {
+        // Les classes se structurent automatiquement par cycle, chacun géré par son préfet
+        Object.keys(CYCLES).forEach(cy => {
+            const cycle = CYCLES[cy];
+            const classesCycle = ec.classes
+                .filter(c => cycleOfNiveau(c.niveau) === cy)
+                .sort((a, b) => (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+            const totalEleves = classesCycle.reduce((s, c) => s + c.eleves.length, 0);
+            const prefet = cy === 'moyen' ? ec.direction.prefetMoyen : ec.direction.prefetSecondaire;
+            html += `<div class="cycle-section">
+                <div class="cycle-head">
+                    <div>
+                        <h3>${cycle.label} <span class="cycle-sub">${cycle.sub}</span></h3>
+                        <div class="cycle-prefet">Préfet : ${prefet ? '<strong>' + esc(prefet) + '</strong>' : '<em>non renseigné</em>'}</div>
+                    </div>
+                    <div class="cycle-counts">${classesCycle.length} classe(s) · ${totalEleves} élève(s)</div>
+                </div>`;
+            if (classesCycle.length === 0) {
+                html += '<div class="empty-state" style="padding:14px;"><p>Aucune classe dans ce cycle.</p></div>';
+            } else {
+                html += '<div class="config-grid">';
+                classesCycle.forEach(c => {
+                    const prof = ec.professeurs.find(p => p.id === c.profId);
+                    const stack = c.eleves.slice(0, 5).map(e => crmAvatar(e.prenom, e.nom)).join('')
+                        + (c.eleves.length > 5 ? `<span class="crm-avatar crm-avatar-more">+${c.eleves.length - 5}</span>` : '');
+                    html += `<div class="classe-card" onclick="openClasseDetail('${c.id}')">
+                        <div class="classe-card-head">
+                            <h3>${esc(c.nom)}</h3>
+                            <span class="classe-niveau-badge">${esc(c.niveau)}</span>
+                        </div>
+                        <p class="classe-card-info">
+                            <strong>${c.eleves.length}</strong> élève(s)
+                            ${prof ? '<br>Prof. principal : ' + esc(prof.prenom + ' ' + prof.nom) : ''}
+                        </p>
+                        ${stack ? '<div class="crm-avatar-stack">' + stack + '</div>' : ''}
+                        <div class="btn-group no-print" onclick="event.stopPropagation()">
+                            <button class="btn btn-sm btn-info" onclick="openClasseDetail('${c.id}')">Gérer les élèves</button>
+                            <button class="btn btn-sm btn-outline" onclick="editClasse('${c.id}')">Modifier</button>
+                            <button class="btn btn-sm btn-danger" onclick="confirmDeleteClasse('${c.id}')">Supprimer</button>
+                        </div>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+    }
+    document.getElementById('classesContent').innerHTML = html;
+}
+
+function renderClasseDetail(classe) {
+    const ec = getEcoleData();
+    document.getElementById('classesTitle').textContent = 'Classe : ' + classe.nom;
+    const prof = ec.professeurs.find(p => p.id === classe.profId);
+    const nbF = classe.eleves.filter(e => e.sexe === 'F').length;
+    let html = `
+        <div class="btn-group no-print">
+            <button class="btn btn-outline" onclick="closeClasseDetail()">&larr; Toutes les classes</button>
+            <button class="btn btn-primary" onclick="showAddEleveModal('${classe.id}')">+ Ajouter un élève</button>
+        </div>
+        <div class="alert alert-info">
+            Niveau : <strong>${Security.escapeHTML(classe.niveau)}</strong>
+            ${prof ? ' — Prof. principal : <strong>' + Security.escapeHTML(prof.prenom + ' ' + prof.nom) + '</strong>' : ''}
+            — <strong>${classe.eleves.length}</strong> élève(s) (${classe.eleves.length - nbF} garçon(s), ${nbF} fille(s))
+        </div>`;
+    if (classe.eleves.length === 0) {
+        html += '<div class="empty-state"><p>Aucun élève dans cette classe. Cliquez sur « + Ajouter un élève ».</p></div>';
+    } else {
+        html += `<div class="table-wrapper"><table>
+            <thead><tr><th>#</th><th>Élève</th><th>Sexe</th><th>Date de naissance</th><th>Tél. tuteur</th><th class="no-print">Actions</th></tr></thead><tbody>`;
+        classe.eleves.forEach((e, i) => {
+            html += `<tr class="crm-row" onclick="openEleveFiche('${classe.id}', ${i})" title="Voir la fiche">
+                <td>${i + 1}</td>
+                <td><span class="crm-name-cell">${crmAvatar(e.prenom, e.nom)}<span>${Security.escapeHTML(e.prenom)} <strong>${Security.escapeHTML(e.nom)}</strong></span></span></td>
+                <td>${e.sexe === 'F' ? 'Fille' : 'Garçon'}</td>
+                <td>${formatDateNaissanceFR(e.dateNaissance)}</td>
+                <td>${Security.escapeHTML(e.telephone || '—')}</td>
+                <td class="no-print" onclick="event.stopPropagation()">
+                    <button class="btn btn-sm btn-info" onclick="editEleve('${classe.id}', ${i})">Modifier</button>
+                    <button class="btn btn-sm btn-danger" onclick="confirmDeleteEleve('${classe.id}', ${i})">Supprimer</button>
+                </td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+    document.getElementById('classesContent').innerHTML = html;
+}
+
+function openClasseDetail(id) { currentClasseId = id; renderClassesPage(); }
+function closeClasseDetail() { currentClasseId = null; renderClassesPage(); }
+
+function populateClasseProfSelect(selectedId) {
+    const ec = getEcoleData();
+    const sel = document.getElementById('classeProf');
+    sel.innerHTML = '<option value="">— Aucun —</option>';
+    ec.professeurs.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.prenom + ' ' + p.nom;
+        if (p.id === selectedId) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function showAddClasseModal() {
+    document.getElementById('classeModalTitle').textContent = 'Ajouter une classe';
+    document.getElementById('editClasseId').value = '';
+    document.getElementById('classeNom').value = '';
+    document.getElementById('classeNiveau').value = '6ème';
+    populateClasseProfSelect('');
+    document.getElementById('classeModal').classList.add('show');
+}
+
+function editClasse(id) {
+    const c = getEcoleData().classes.find(c => c.id === id);
+    if (!c) return;
+    document.getElementById('classeModalTitle').textContent = 'Modifier la classe';
+    document.getElementById('editClasseId').value = c.id;
+    document.getElementById('classeNom').value = c.nom;
+    document.getElementById('classeNiveau').value = c.niveau;
+    populateClasseProfSelect(c.profId || '');
+    document.getElementById('classeModal').classList.add('show');
+}
+
+function saveClasse() {
+    const ec = getEcoleData();
+    const id = document.getElementById('editClasseId').value;
+    const nom = document.getElementById('classeNom').value.trim();
+    if (!nom) { toast('Le nom de la classe est requis.', 'warning'); return; }
+    if (ec.classes.some(c => c.id !== id && c.nom.toLowerCase() === nom.toLowerCase())) {
+        toast('Une classe porte déjà ce nom.', 'warning'); return;
+    }
+    const niveau = document.getElementById('classeNiveau').value;
+    const profId = document.getElementById('classeProf').value;
+    if (id) {
+        const c = ec.classes.find(c => c.id === id);
+        if (!c) return;
+        c.nom = nom; c.niveau = niveau; c.profId = profId;
+        logActivity('Classe modifiée : ' + nom, 'config');
+        toast('Classe modifiée.', 'success');
+    } else {
+        ec.classes.push({ id: ecoleUid('cl_'), nom: nom, niveau: niveau, profId: profId, eleves: [] });
+        logActivity('Classe créée : ' + nom, 'config');
+        toast('Classe ajoutée.', 'success');
+    }
+    saveData();
+    closeModal('classeModal');
+    renderClassesPage();
+}
+
+function confirmDeleteClasse(id) {
+    const ec = getEcoleData();
+    const c = ec.classes.find(c => c.id === id);
+    if (!c) return;
+    showConfirm('Supprimer la classe', `Supprimer la classe « ${c.nom} » et ses ${c.eleves.length} élève(s) ? Cette action est irréversible.`, () => {
+        ec.classes = ec.classes.filter(x => x.id !== id);
+        // La classe supprimée ne doit plus apparaître chez les professeurs
+        ec.professeurs.forEach(p => { p.classes = (p.classes || []).filter(cid => cid !== id); });
+        if (currentClasseId === id) currentClasseId = null;
+        saveData();
+        logActivity('Classe supprimée : ' + c.nom, 'config');
+        toast('Classe supprimée.', 'success');
+        renderClassesPage();
+    });
+}
+
+// ---------- Élèves d'une classe ----------
+let selectedEleveSexe = 'M';
+function selectEleveSexe(s) {
+    selectedEleveSexe = s;
+    document.querySelectorAll('#eleveSexeToggle .btn-sexe').forEach(b => b.classList.toggle('active', b.dataset.sexe === s));
+}
+
+// Remplit le sélecteur de classe du modal élève (groupé par cycle)
+function populateEleveClasseSelect(selectedId) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('eleveClasse');
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const classesCycle = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (classesCycle.length === 0) return '';
+        return `<optgroup label="${CYCLES[cy].label} (${CYCLES[cy].sub})">`
+            + classesCycle.map(c => `<option value="${c.id}">${esc(c.nom)} — ${esc(c.niveau)}</option>`).join('')
+            + '</optgroup>';
+    }).join('');
+    if (selectedId && ec.classes.some(c => c.id === selectedId)) sel.value = selectedId;
+}
+
+// classeId facultatif : sans lui, c'est une inscription "globale" où l'on
+// choisit la classe dans le formulaire (selon l'inscription de l'élève).
+function showAddEleveModal(classeId) {
+    const ec = getEcoleData();
+    if (ec.classes.length === 0) {
+        toast('Créez d\'abord une classe avant d\'inscrire un élève.', 'warning');
+        return;
+    }
+    document.getElementById('eleveModalTitle').textContent = 'Inscrire un élève';
+    document.getElementById('eleveClasseId').value = classeId || '';
+    document.getElementById('editEleveIdx').value = '-1';
+    populateEleveClasseSelect(classeId || '');
+    document.getElementById('elevePrenom').value = '';
+    document.getElementById('eleveNom').value = '';
+    document.getElementById('eleveDateNaissance').value = '';
+    document.getElementById('eleveTelTuteur').value = '';
+    document.getElementById('eleveAdresse').value = '';
+    selectEleveSexe('M');
+    document.getElementById('eleveModal').classList.add('show');
+}
+
+function editEleve(classeId, idx) {
+    const classe = getEcoleData().classes.find(c => c.id === classeId);
+    const e = classe && classe.eleves[idx];
+    if (!e) return;
+    document.getElementById('eleveModalTitle').textContent = 'Modifier l\'élève';
+    document.getElementById('eleveClasseId').value = classeId;
+    document.getElementById('editEleveIdx').value = String(idx);
+    populateEleveClasseSelect(classeId);
+    document.getElementById('elevePrenom').value = e.prenom;
+    document.getElementById('eleveNom').value = e.nom;
+    document.getElementById('eleveDateNaissance').value = e.dateNaissance || '';
+    document.getElementById('eleveTelTuteur').value = e.telephone || '';
+    document.getElementById('eleveAdresse').value = e.adresse || '';
+    selectEleveSexe(e.sexe === 'F' ? 'F' : 'M');
+    closeCrmDrawer();
+    document.getElementById('eleveModal').classList.add('show');
+}
+
+function saveEleve() {
+    const ec = getEcoleData();
+    // Classe d'inscription choisie dans le formulaire
+    const targetClasse = ec.classes.find(c => c.id === document.getElementById('eleveClasse').value);
+    if (!targetClasse) { toast('Choisissez une classe d\'inscription.', 'warning'); return; }
+    // Classe d'origine (vide pour une nouvelle inscription globale)
+    const origClasse = ec.classes.find(c => c.id === document.getElementById('eleveClasseId').value);
+    const idx = parseInt(document.getElementById('editEleveIdx').value, 10);
+    const prenom = document.getElementById('elevePrenom').value.trim();
+    const nom = document.getElementById('eleveNom').value.trim();
+    if (!prenom || !nom) { toast('Prénom et nom sont requis.', 'warning'); return; }
+    const eleve = {
+        prenom: prenom,
+        nom: nom,
+        sexe: selectedEleveSexe,
+        dateNaissance: document.getElementById('eleveDateNaissance').value || '',
+        telephone: document.getElementById('eleveTelTuteur').value.trim(),
+        adresse: document.getElementById('eleveAdresse').value.trim()
+    };
+    if (idx >= 0 && origClasse && origClasse.eleves[idx]) {
+        // L'id (référence des paiements) et les notes internes (fiche CRM)
+        // ne passent pas par ce modal : on les conserve.
+        eleve.id = origClasse.eleves[idx].id || ecoleUid('el_');
+        eleve.notes = origClasse.eleves[idx].notes || '';
+        if (targetClasse.id === origClasse.id) {
+            origClasse.eleves[idx] = eleve;
+            logActivity(`Élève modifié en ${origClasse.nom} : ${prenom} ${nom}`, 'config');
+            toast('Élève modifié.', 'success');
+        } else {
+            // Transfert : l'élève suit son inscription, ses paiements aussi
+            origClasse.eleves.splice(idx, 1);
+            targetClasse.eleves.push(eleve);
+            getComptaData().paiements.forEach(p => { if (p.eleveId === eleve.id) p.classeId = targetClasse.id; });
+            logActivity(`Élève transféré de ${origClasse.nom} vers ${targetClasse.nom} : ${prenom} ${nom}`, 'config');
+            toast(`Élève transféré en ${targetClasse.nom}.`, 'success');
+        }
+    } else {
+        eleve.id = ecoleUid('el_');
+        targetClasse.eleves.push(eleve);
+        logActivity(`Élève inscrit en ${targetClasse.nom} : ${prenom} ${nom}`, 'config');
+        toast(`Élève inscrit en ${targetClasse.nom}.`, 'success');
+    }
+    // Même convention que le module Examens : liste alphabétique canonique
+    targetClasse.eleves.sort((a, b) => (a.nom + ' ' + a.prenom).localeCompare(b.nom + ' ' + b.prenom, 'fr'));
+    saveData();
+    closeModal('eleveModal');
+    if (currentPage === 'classes') renderClassesPage();
+    if (currentPage === 'ecole') renderEcolePage();
+}
+
+function confirmDeleteEleve(classeId, idx) {
+    const classe = getEcoleData().classes.find(c => c.id === classeId);
+    const e = classe && classe.eleves[idx];
+    if (!e) return;
+    showConfirm('Supprimer l\'élève', `Supprimer ${e.prenom} ${e.nom} de la classe ${classe.nom} ?`, () => {
+        closeCrmDrawer();
+        classe.eleves.splice(idx, 1);
+        saveData();
+        logActivity(`Élève supprimé de ${classe.nom} : ${e.prenom} ${e.nom}`, 'config');
+        toast('Élève supprimé.', 'success');
+        renderClassesPage();
+    });
+}
+
+// ---------- Professeurs ----------
+// Statut d'un professeur (les anciens enregistrements n'en avaient pas)
+function profStatut(p) { return p.statut === 'Vacataire' ? 'Vacataire' : 'Permanent'; }
+
+// Filtre courant de la liste : 'tous' | 'Permanent' | 'Vacataire'
+let profStatutFilter = 'tous';
+
+function setProfStatutFilter(f, btnEl) {
+    profStatutFilter = f;
+    document.querySelectorAll('#profsStatutTabs button').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    renderProfsTable();
+}
+
+function renderProfsTable() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const q = (document.getElementById('profSearch').value || '').toLowerCase();
+    const nbPerm = ec.professeurs.filter(p => profStatut(p) === 'Permanent').length;
+    document.getElementById('profCount').textContent = ec.professeurs.length;
+    document.getElementById('profCountDetail').textContent =
+        `${nbPerm} permanent(s), ${ec.professeurs.length - nbPerm} vacataire(s)`;
+    const profs = ec.professeurs.filter(p =>
+        (profStatutFilter === 'tous' || profStatut(p) === profStatutFilter) &&
+        (!q || (p.prenom + ' ' + p.nom + ' ' + (p.matiere || '')).toLowerCase().includes(q)));
+    const tbody = document.querySelector('#profsTable tbody');
+    if (profs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">Aucun professeur.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = profs.map(p => {
+        const classesNoms = (p.classes || [])
+            .map(cid => { const c = ec.classes.find(c => c.id === cid); return c ? c.nom : null; })
+            .filter(Boolean);
+        const st = profStatut(p);
+        return `<tr class="crm-row" onclick="openProfFiche('${p.id}')" title="Voir la fiche">
+            <td><span class="crm-name-cell">${crmAvatar(p.prenom, p.nom)}<span>${esc(p.prenom)}</span></span></td>
+            <td><strong>${esc(p.nom)}</strong></td>
+            <td>${esc(p.matiere || '—')}</td>
+            <td><span class="statut-badge ${st === 'Permanent' ? 'permanent' : 'vacataire'}">${st}</span></td>
+            <td>${esc(p.telephone || '—')}</td>
+            <td>${esc(p.email || '—')}</td>
+            <td>${classesNoms.length ? classesNoms.map(n => '<span class="classe-chip">' + esc(n) + '</span>').join(' ') : '—'}</td>
+            <td class="no-print" onclick="event.stopPropagation()">
+                <button class="btn btn-sm btn-info" onclick="editProf('${p.id}')">Modifier</button>
+                <button class="btn btn-sm btn-danger" onclick="confirmDeleteProf('${p.id}')">Supprimer</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+const _debouncedProfSearch = debounce(renderProfsTable, 150);
+function onProfSearchInput() { _debouncedProfSearch(); }
+
+function populateProfClassesChecks(selectedIds) {
+    const ec = getEcoleData();
+    const box = document.getElementById('profClassesChecks');
+    if (ec.classes.length === 0) {
+        box.innerHTML = '<span style="color:var(--text-secondary); font-size:0.85em;">Aucune classe créée pour le moment.</span>';
+        return;
+    }
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    box.innerHTML = tri.map(c =>
+        `<label class="prof-classe-check"><input type="checkbox" value="${c.id}"${selectedIds.includes(c.id) ? ' checked' : ''}> ${Security.escapeHTML(c.nom)}</label>`
+    ).join('');
+}
+
+function showAddProfModal() {
+    document.getElementById('profModalTitle').textContent = 'Ajouter un professeur';
+    document.getElementById('editProfId').value = '';
+    document.getElementById('profPrenom').value = '';
+    document.getElementById('profNom').value = '';
+    document.getElementById('profMatiere').value = '';
+    document.getElementById('profStatut').value = 'Permanent';
+    document.getElementById('profTel').value = '';
+    document.getElementById('profEmail').value = '';
+    populateProfClassesChecks([]);
+    document.getElementById('profModal').classList.add('show');
+}
+
+function editProf(id) {
+    const p = getEcoleData().professeurs.find(p => p.id === id);
+    if (!p) return;
+    document.getElementById('profModalTitle').textContent = 'Modifier le professeur';
+    document.getElementById('editProfId').value = p.id;
+    document.getElementById('profPrenom').value = p.prenom;
+    document.getElementById('profNom').value = p.nom;
+    document.getElementById('profMatiere').value = p.matiere || '';
+    document.getElementById('profStatut').value = profStatut(p);
+    document.getElementById('profTel').value = p.telephone || '';
+    document.getElementById('profEmail').value = p.email || '';
+    populateProfClassesChecks(p.classes || []);
+    closeCrmDrawer();
+    document.getElementById('profModal').classList.add('show');
+}
+
+function saveProf() {
+    const ec = getEcoleData();
+    const id = document.getElementById('editProfId').value;
+    const prenom = document.getElementById('profPrenom').value.trim();
+    const nom = document.getElementById('profNom').value.trim();
+    if (!prenom || !nom) { toast('Prénom et nom sont requis.', 'warning'); return; }
+    const classes = Array.from(document.querySelectorAll('#profClassesChecks input:checked')).map(i => i.value);
+    const data = {
+        prenom: prenom,
+        nom: nom,
+        matiere: document.getElementById('profMatiere').value.trim(),
+        statut: document.getElementById('profStatut').value,
+        telephone: document.getElementById('profTel').value.trim(),
+        email: document.getElementById('profEmail').value.trim(),
+        classes: classes
+    };
+    if (id) {
+        const p = ec.professeurs.find(p => p.id === id);
+        if (!p) return;
+        Object.assign(p, data);
+        logActivity(`Professeur modifié : ${prenom} ${nom}`, 'config');
+        toast('Professeur modifié.', 'success');
+    } else {
+        ec.professeurs.push(Object.assign({ id: ecoleUid('pr_') }, data));
+        logActivity(`Professeur ajouté : ${prenom} ${nom}`, 'config');
+        toast('Professeur ajouté.', 'success');
+    }
+    ec.professeurs.sort((a, b) => (a.nom + ' ' + a.prenom).localeCompare(b.nom + ' ' + b.prenom, 'fr'));
+    saveData();
+    closeModal('profModal');
+    renderProfsTable();
+}
+
+function confirmDeleteProf(id) {
+    const ec = getEcoleData();
+    const p = ec.professeurs.find(p => p.id === id);
+    if (!p) return;
+    showConfirm('Supprimer le professeur', `Supprimer ${p.prenom} ${p.nom} ?`, () => {
+        closeCrmDrawer();
+        ec.professeurs = ec.professeurs.filter(x => x.id !== id);
+        // Retire ce professeur des classes dont il était le prof principal
+        ec.classes.forEach(c => { if (c.profId === id) c.profId = ''; });
+        saveData();
+        logActivity(`Professeur supprimé : ${p.prenom} ${p.nom}`, 'config');
+        toast('Professeur supprimé.', 'success');
+        renderProfsTable();
+    });
+}
+
+// ---------- Fiches CRM (panneau latéral) ----------
+function openCrmDrawer(html) {
+    document.getElementById('crmDrawerContent').innerHTML = html;
+    document.getElementById('crmDrawer').classList.add('open');
+    document.getElementById('crmDrawer').setAttribute('aria-hidden', 'false');
+    document.getElementById('crmDrawerOverlay').classList.add('show');
+}
+
+function closeCrmDrawer() {
+    const drawer = document.getElementById('crmDrawer');
+    if (!drawer) return;
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    document.getElementById('crmDrawerOverlay').classList.remove('show');
+}
+
+function crmInfoRow(label, value) {
+    return `<div class="crm-info-row"><span class="crm-info-label">${label}</span><span class="crm-info-value">${value}</span></div>`;
+}
+
+function openEleveFiche(classeId, idx) {
+    const ec = getEcoleData();
+    const classe = ec.classes.find(c => c.id === classeId);
+    const e = classe && classe.eleves[idx];
+    if (!e) return;
+    const esc = Security.escapeHTML;
+    openCrmDrawer(`
+        <div class="crm-fiche-head">
+            ${crmAvatar(e.prenom, e.nom, 'xl')}
+            <div>
+                <h3>${esc(e.prenom)} ${esc(e.nom)}</h3>
+                <div class="crm-badges">
+                    <span class="classe-chip">${esc(classe.nom)}</span>
+                    <span class="classe-chip">${e.sexe === 'F' ? 'Fille' : 'Garçon'}</span>
+                </div>
+            </div>
+        </div>
+        <div class="crm-section">
+            <h4>Coordonnées</h4>
+            ${crmInfoRow('Date de naissance', formatDateNaissanceFR(e.dateNaissance))}
+            ${crmInfoRow('Tél. parent / tuteur', esc(e.telephone || '—'))}
+            ${crmInfoRow('Adresse', esc(e.adresse || '—'))}
+            ${crmInfoRow('Classe', esc(classe.nom + ' (' + classe.niveau + ')'))}
+        </div>
+        ${crmEleveScolariteHTML(e, classe, classeId, idx)}
+        <div class="crm-section">
+            <h4>Notes internes</h4>
+            <textarea id="crmNotesArea" rows="5" placeholder="Observations, suivi, remarques...">${esc(e.notes || '')}</textarea>
+            <button class="btn btn-sm btn-success" style="margin-top:8px;" onclick="saveEleveNotes('${classeId}', ${idx})">Enregistrer les notes</button>
+        </div>
+        <div class="crm-fiche-actions">
+            <button class="btn btn-info" onclick="editEleve('${classeId}', ${idx})">Modifier la fiche</button>
+            <button class="btn btn-danger" onclick="confirmDeleteEleve('${classeId}', ${idx})">Supprimer</button>
+        </div>`);
+}
+
+function saveEleveNotes(classeId, idx) {
+    const classe = getEcoleData().classes.find(c => c.id === classeId);
+    const e = classe && classe.eleves[idx];
+    if (!e) return;
+    e.notes = document.getElementById('crmNotesArea').value.trim();
+    saveData();
+    toast('Notes enregistrées.', 'success');
+}
+
+function openProfFiche(id) {
+    const ec = getEcoleData();
+    const p = ec.professeurs.find(p => p.id === id);
+    if (!p) return;
+    const esc = Security.escapeHTML;
+    const classesNoms = (p.classes || [])
+        .map(cid => { const c = ec.classes.find(c => c.id === cid); return c ? c.nom : null; })
+        .filter(Boolean);
+    const principalDe = ec.classes.filter(c => c.profId === id).map(c => c.nom);
+    openCrmDrawer(`
+        <div class="crm-fiche-head">
+            ${crmAvatar(p.prenom, p.nom, 'xl')}
+            <div>
+                <h3>${esc(p.prenom)} ${esc(p.nom)}</h3>
+                <div class="crm-badges">
+                    <span class="classe-chip">${esc(p.matiere || 'Matière non renseignée')}</span>
+                    <span class="statut-badge ${profStatut(p) === 'Permanent' ? 'permanent' : 'vacataire'}">${profStatut(p)}</span>
+                </div>
+            </div>
+        </div>
+        <div class="crm-section">
+            <h4>Coordonnées</h4>
+            ${crmInfoRow('Téléphone', esc(p.telephone || '—'))}
+            ${crmInfoRow('Email', esc(p.email || '—'))}
+        </div>
+        <div class="crm-section">
+            <h4>Classes</h4>
+            ${crmInfoRow('Enseigne en', classesNoms.length ? classesNoms.map(n => '<span class="classe-chip">' + esc(n) + '</span>').join(' ') : '—')}
+            ${crmInfoRow('Prof. principal de', principalDe.length ? principalDe.map(n => '<span class="classe-chip">' + esc(n) + '</span>').join(' ') : '—')}
+        </div>
+        <div class="crm-section">
+            <h4>Notes internes</h4>
+            <textarea id="crmNotesArea" rows="5" placeholder="Observations, suivi, remarques...">${esc(p.notes || '')}</textarea>
+            <button class="btn btn-sm btn-success" style="margin-top:8px;" onclick="saveProfNotes('${id}')">Enregistrer les notes</button>
+        </div>
+        <div class="crm-fiche-actions">
+            <button class="btn btn-info" onclick="editProf('${id}')">Modifier la fiche</button>
+            <button class="btn btn-danger" onclick="confirmDeleteProf('${id}')">Supprimer</button>
+        </div>`);
+}
+
+function saveProfNotes(id) {
+    const p = getEcoleData().professeurs.find(p => p.id === id);
+    if (!p) return;
+    p.notes = document.getElementById('crmNotesArea').value.trim();
+    saveData();
+    toast('Notes enregistrées.', 'success');
+}
+
+// ================================================================
+// ========== MODULE ADMINISTRATION (personnel) ===================
+// ================================================================
+
+function getAdminData() {
+    if (!appData.administration) appData.administration = { personnel: [] };
+    if (!Array.isArray(appData.administration.personnel)) appData.administration.personnel = [];
+    return appData.administration;
+}
+
+function renderPersonnelTable() {
+    const ad = getAdminData();
+    const esc = Security.escapeHTML;
+    const q = (document.getElementById('personnelSearch').value || '').toLowerCase();
+    document.getElementById('personnelCount').textContent = ad.personnel.length;
+    const membres = ad.personnel.filter(p =>
+        !q || (p.prenom + ' ' + p.nom + ' ' + (p.fonction || '')).toLowerCase().includes(q));
+    const tbody = document.querySelector('#personnelTable tbody');
+    if (membres.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-secondary);">Aucun membre du personnel.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = membres.map(p => `<tr class="crm-row" onclick="openPersonnelFiche('${p.id}')" title="Voir la fiche">
+        <td><span class="crm-name-cell">${crmAvatar(p.prenom, p.nom)}<span>${esc(p.prenom)}</span></span></td>
+        <td><strong>${esc(p.nom)}</strong></td>
+        <td><span class="classe-chip">${esc(p.fonction || '—')}</span></td>
+        <td>${esc(p.telephone || '—')}</td>
+        <td>${esc(p.email || '—')}</td>
+        <td class="no-print" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-info" onclick="editPersonnel('${p.id}')">Modifier</button>
+            <button class="btn btn-sm btn-danger" onclick="confirmDeletePersonnel('${p.id}')">Supprimer</button>
+        </td>
+    </tr>`).join('');
+}
+
+const _debouncedPersonnelSearch = debounce(renderPersonnelTable, 150);
+function onPersonnelSearchInput() { _debouncedPersonnelSearch(); }
+
+function showAddPersonnelModal() {
+    document.getElementById('personnelModalTitle').textContent = 'Ajouter un membre du personnel';
+    document.getElementById('editPersonnelId').value = '';
+    document.getElementById('personnelPrenom').value = '';
+    document.getElementById('personnelNom').value = '';
+    document.getElementById('personnelFonction').value = 'Secrétaire';
+    document.getElementById('personnelTel').value = '';
+    document.getElementById('personnelEmail').value = '';
+    document.getElementById('personnelModal').classList.add('show');
+}
+
+function editPersonnel(id) {
+    const p = getAdminData().personnel.find(p => p.id === id);
+    if (!p) return;
+    document.getElementById('personnelModalTitle').textContent = 'Modifier le membre du personnel';
+    document.getElementById('editPersonnelId').value = p.id;
+    document.getElementById('personnelPrenom').value = p.prenom;
+    document.getElementById('personnelNom').value = p.nom;
+    document.getElementById('personnelFonction').value = p.fonction || 'Autre';
+    document.getElementById('personnelTel').value = p.telephone || '';
+    document.getElementById('personnelEmail').value = p.email || '';
+    closeCrmDrawer();
+    document.getElementById('personnelModal').classList.add('show');
+}
+
+function savePersonnel() {
+    const ad = getAdminData();
+    const id = document.getElementById('editPersonnelId').value;
+    const prenom = document.getElementById('personnelPrenom').value.trim();
+    const nom = document.getElementById('personnelNom').value.trim();
+    if (!prenom || !nom) { toast('Prénom et nom sont requis.', 'warning'); return; }
+    const data = {
+        prenom: prenom,
+        nom: nom,
+        fonction: document.getElementById('personnelFonction').value,
+        telephone: document.getElementById('personnelTel').value.trim(),
+        email: document.getElementById('personnelEmail').value.trim()
+    };
+    if (id) {
+        const p = ad.personnel.find(p => p.id === id);
+        if (!p) return;
+        Object.assign(p, data);
+        logActivity(`Personnel modifié : ${prenom} ${nom}`, 'config');
+        toast('Membre modifié.', 'success');
+    } else {
+        ad.personnel.push(Object.assign({ id: ecoleUid('pe_') }, data));
+        logActivity(`Personnel ajouté : ${prenom} ${nom} (${data.fonction})`, 'config');
+        toast('Membre ajouté.', 'success');
+    }
+    ad.personnel.sort((a, b) => (a.nom + ' ' + a.prenom).localeCompare(b.nom + ' ' + b.prenom, 'fr'));
+    saveData();
+    closeModal('personnelModal');
+    renderPersonnelTable();
+}
+
+function confirmDeletePersonnel(id) {
+    const ad = getAdminData();
+    const p = ad.personnel.find(p => p.id === id);
+    if (!p) return;
+    showConfirm('Supprimer le membre', `Supprimer ${p.prenom} ${p.nom} du personnel ?`, () => {
+        closeCrmDrawer();
+        ad.personnel = ad.personnel.filter(x => x.id !== id);
+        saveData();
+        logActivity(`Personnel supprimé : ${p.prenom} ${p.nom}`, 'config');
+        toast('Membre supprimé.', 'success');
+        renderPersonnelTable();
+    });
+}
+
+function openPersonnelFiche(id) {
+    const p = getAdminData().personnel.find(p => p.id === id);
+    if (!p) return;
+    const esc = Security.escapeHTML;
+    openCrmDrawer(`
+        <div class="crm-fiche-head">
+            ${crmAvatar(p.prenom, p.nom, 'xl')}
+            <div>
+                <h3>${esc(p.prenom)} ${esc(p.nom)}</h3>
+                <div class="crm-badges"><span class="classe-chip">${esc(p.fonction || 'Fonction non renseignée')}</span></div>
+            </div>
+        </div>
+        <div class="crm-section">
+            <h4>Coordonnées</h4>
+            ${crmInfoRow('Téléphone', esc(p.telephone || '—'))}
+            ${crmInfoRow('Email', esc(p.email || '—'))}
+        </div>
+        <div class="crm-section">
+            <h4>Notes internes</h4>
+            <textarea id="crmNotesArea" rows="5" placeholder="Observations, suivi, remarques...">${esc(p.notes || '')}</textarea>
+            <button class="btn btn-sm btn-success" style="margin-top:8px;" onclick="savePersonnelNotes('${id}')">Enregistrer les notes</button>
+        </div>
+        <div class="crm-fiche-actions">
+            <button class="btn btn-info" onclick="editPersonnel('${id}')">Modifier la fiche</button>
+            <button class="btn btn-danger" onclick="confirmDeletePersonnel('${id}')">Supprimer</button>
+        </div>`);
+}
+
+function savePersonnelNotes(id) {
+    const p = getAdminData().personnel.find(p => p.id === id);
+    if (!p) return;
+    p.notes = document.getElementById('crmNotesArea').value.trim();
+    saveData();
+    toast('Notes enregistrées.', 'success');
+}
+
+// ================================================================
+// ========== MODULE COMPTABILITÉ (frais, paiements, dépenses) ====
+// ================================================================
+
+function getComptaData() {
+    if (!appData.compta) appData.compta = { fraisParNiveau: {}, paiements: [], depenses: [] };
+    const c = appData.compta;
+    if (!c.fraisParNiveau) c.fraisParNiveau = {};
+    if (!Array.isArray(c.paiements)) c.paiements = [];
+    if (!Array.isArray(c.depenses)) c.depenses = [];
+    return c;
+}
+
+// Chaque élève a un id stable (référencé par les paiements). Les élèves créés
+// avant l'arrivée de la comptabilité n'en avaient pas : on complète au chargement.
+function ensureEleveIds() {
+    if (!appData.ecole) return;
+    let changed = false;
+    (appData.ecole.classes || []).forEach(c => (c.eleves || []).forEach(e => {
+        if (!e.id) { e.id = ecoleUid('el_'); changed = true; }
+    }));
+    if (changed) saveData();
+}
+
+function formatMoney(n) {
+    return (Math.round(n) || 0).toLocaleString('fr-FR') + ' F';
+}
+
+function findEleveById(id) {
+    const ec = getEcoleData();
+    for (const c of ec.classes) {
+        const e = c.eleves.find(e => e.id === id);
+        if (e) return { eleve: e, classe: c };
+    }
+    return null;
+}
+
+function paiementsOf(eleveId) {
+    return getComptaData().paiements.filter(p => p.eleveId === eleveId);
+}
+
+function totalPaye(eleveId) {
+    return paiementsOf(eleveId).reduce((s, p) => s + (p.montant || 0), 0);
+}
+
+function fraisPourNiveau(niveau) {
+    return parseInt(getComptaData().fraisParNiveau[niveau], 10) || 0;
+}
+
+// ---------- Vue d'ensemble ----------
+function renderComptaDashboard() {
+    const ec = getEcoleData();
+    const co = getComptaData();
+    let attendu = 0;
+    ec.classes.forEach(c => attendu += c.eleves.length * fraisPourNiveau(c.niveau));
+    const encaisse = co.paiements.reduce((s, p) => s + (p.montant || 0), 0);
+    const depenses = co.depenses.reduce((s, d) => s + (d.montant || 0), 0);
+    const solde = encaisse - depenses;
+    const taux = attendu > 0 ? Math.round(encaisse / attendu * 100) : 0;
+    document.getElementById('comptaStats').innerHTML = `
+        <div class="stat-card blue"><div class="number">${formatMoney(attendu)}</div><div class="label">Attendu (scolarité)</div></div>
+        <div class="stat-card green"><div class="number">${formatMoney(encaisse)}</div><div class="label">Encaissé</div><div class="pct">${taux}% recouvré</div></div>
+        <div class="stat-card orange"><div class="number">${formatMoney(depenses)}</div><div class="label">Dépenses</div></div>
+        <div class="stat-card ${solde >= 0 ? 'green' : 'red'}"><div class="number">${formatMoney(solde)}</div><div class="label">Solde</div></div>`;
+    renderFraisNiveaux();
+    renderComptaRecents();
+}
+
+function renderFraisNiveaux() {
+    const co = getComptaData();
+    const box = document.getElementById('fraisNiveaux');
+    box.innerHTML = CLASSE_NIVEAUX.map(niv => `
+        <div class="frais-row">
+            <label>${Security.escapeHTML(niv)}</label>
+            <input type="number" min="0" step="500" class="frais-input" data-niveau="${Security.escapeHTML(niv)}" value="${fraisPourNiveau(niv)}">
+            <span class="frais-unit">F CFA / an</span>
+        </div>`).join('');
+}
+
+function saveFraisNiveaux() {
+    const co = getComptaData();
+    document.querySelectorAll('.frais-input').forEach(inp => {
+        co.fraisParNiveau[inp.dataset.niveau] = parseInt(inp.value, 10) || 0;
+    });
+    saveData();
+    logActivity('Frais de scolarité par niveau mis à jour', 'config');
+    toast('Frais de scolarité sauvegardés.', 'success');
+    renderComptaDashboard();
+}
+
+function renderComptaRecents() {
+    const co = getComptaData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('comptaRecents');
+    const recents = [...co.paiements].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 8);
+    if (recents.length === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucun paiement enregistré.</p></div>';
+        return;
+    }
+    box.innerHTML = '<div class="crm-activity">' + recents.map(p => {
+        const found = findEleveById(p.eleveId);
+        const nomEleve = found ? found.eleve.prenom + ' ' + found.eleve.nom : 'Élève supprimé';
+        return `
+        <div class="crm-activity-item">
+            <span class="crm-activity-dot"></span>
+            <div style="flex:1;">
+                <div class="crm-activity-msg"><strong>${formatMoney(p.montant)}</strong> — ${esc(nomEleve)}${found ? ' (' + esc(found.classe.nom) + ')' : ''}</div>
+                <div class="crm-activity-time">${formatDateNaissanceFR(p.date)} · ${esc(p.motif || '')} · ${esc(p.mode || '')}</div>
+            </div>
+        </div>`;
+    }).join('') + '</div>';
+}
+
+// ---------- Paiements par classe ----------
+function renderPaiementsPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('paiementsClasseSelect');
+    const content = document.getElementById('paiementsContent');
+    if (ec.classes.length === 0) {
+        sel.innerHTML = '';
+        content.innerHTML = '<div class="empty-state"><p>Créez d\'abord des classes et des élèves dans le module École.</p></div>';
+        return;
+    }
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    const prev = sel.value;
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const classesCycle = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (classesCycle.length === 0) return '';
+        return `<optgroup label="${CYCLES[cy].label} (${CYCLES[cy].sub})">`
+            + classesCycle.map(c => `<option value="${c.id}">${esc(c.nom)} (${c.eleves.length} élève(s))</option>`).join('')
+            + '</optgroup>';
+    }).join('');
+    if (prev && tri.some(c => c.id === prev)) sel.value = prev;
+    const classe = ec.classes.find(c => c.id === sel.value) || tri[0];
+    const frais = fraisPourNiveau(classe.niveau);
+    if (classe.eleves.length === 0) {
+        content.innerHTML = '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
+        return;
+    }
+    let totAttendu = 0, totPaye = 0;
+    let rows = '';
+    classe.eleves.forEach((e, i) => {
+        const paye = totalPaye(e.id);
+        const restant = Math.max(0, frais - paye);
+        totAttendu += frais; totPaye += paye;
+        let badge;
+        if (frais === 0) badge = '<span class="pay-badge">—</span>';
+        else if (paye >= frais) badge = '<span class="pay-badge ok">À jour</span>';
+        else if (paye > 0) badge = '<span class="pay-badge partial">Partiel</span>';
+        else badge = '<span class="pay-badge none">Impayé</span>';
+        rows += `<tr class="crm-row" onclick="openEleveFiche('${classe.id}', ${i})" title="Voir la fiche">
+            <td><span class="crm-name-cell">${crmAvatar(e.prenom, e.nom)}<span>${esc(e.prenom)} <strong>${esc(e.nom)}</strong></span></span></td>
+            <td class="money-cell">${formatMoney(frais)}</td>
+            <td class="money-cell">${formatMoney(paye)}</td>
+            <td class="money-cell">${formatMoney(restant)}</td>
+            <td>${badge}</td>
+            <td class="no-print" onclick="event.stopPropagation()">
+                <button class="btn btn-sm btn-success" onclick="showAddPaiementModal('${e.id}')">+ Paiement</button>
+            </td>
+        </tr>`;
+    });
+    const pctClasse = totAttendu > 0 ? Math.round(totPaye / totAttendu * 100) : 0;
+    content.innerHTML = `
+        <div class="alert alert-info">
+            Frais du niveau <strong>${esc(classe.niveau)}</strong> : <strong>${formatMoney(frais)}</strong> / élève / an
+            ${frais === 0 ? ' — <a href="#" onclick="showPage(\'compta\'); return false;">définir les frais</a>' : ''}
+            — Recouvrement de la classe : <strong>${formatMoney(totPaye)}</strong> / ${formatMoney(totAttendu)} (${pctClasse}%)
+        </div>
+        <div class="table-wrapper"><table>
+            <thead><tr><th>Élève</th><th style="text-align:right;">Attendu</th><th style="text-align:right;">Payé</th><th style="text-align:right;">Restant</th><th>Statut</th><th class="no-print">Actions</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>`;
+}
+
+function showAddPaiementModal(eleveId) {
+    const found = findEleveById(eleveId);
+    if (!found) return;
+    document.getElementById('paiementEleveId').value = eleveId;
+    document.getElementById('paiementEleveNom').textContent =
+        found.eleve.prenom + ' ' + found.eleve.nom + ' — ' + found.classe.nom;
+    document.getElementById('paiementMontant').value = '';
+    document.getElementById('paiementDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('paiementMotif').value = 'Scolarité';
+    document.getElementById('paiementMode').value = 'Espèces';
+    document.getElementById('paiementNote').value = '';
+    document.getElementById('paiementModal').classList.add('show');
+}
+
+function savePaiement() {
+    const co = getComptaData();
+    const eleveId = document.getElementById('paiementEleveId').value;
+    const found = findEleveById(eleveId);
+    if (!found) { closeModal('paiementModal'); return; }
+    const montant = parseInt(document.getElementById('paiementMontant').value, 10);
+    if (!montant || montant <= 0) { toast('Saisissez un montant valide.', 'warning'); return; }
+    co.paiements.push({
+        id: ecoleUid('pa_'),
+        eleveId: eleveId,
+        classeId: found.classe.id,
+        montant: montant,
+        date: document.getElementById('paiementDate').value || new Date().toISOString().slice(0, 10),
+        motif: document.getElementById('paiementMotif').value,
+        mode: document.getElementById('paiementMode').value,
+        note: document.getElementById('paiementNote').value.trim()
+    });
+    saveData();
+    logActivity(`Paiement : ${formatMoney(montant)} — ${found.eleve.prenom} ${found.eleve.nom} (${found.classe.nom})`, 'config');
+    toast('Paiement enregistré.', 'success');
+    closeModal('paiementModal');
+    if (currentPage === 'paiements') renderPaiementsPage();
+    if (currentPage === 'compta') renderComptaDashboard();
+    // Si la fiche de l'élève est ouverte, on la rafraîchit
+    if (document.getElementById('crmDrawer').classList.contains('open')) {
+        const idx = found.classe.eleves.indexOf(found.eleve);
+        openEleveFiche(found.classe.id, idx);
+    }
+}
+
+function confirmDeletePaiement(paiementId) {
+    const co = getComptaData();
+    const p = co.paiements.find(x => x.id === paiementId);
+    if (!p) return;
+    const found = findEleveById(p.eleveId);
+    showConfirm('Supprimer le paiement', `Supprimer ce paiement de ${formatMoney(p.montant)} ?`, () => {
+        co.paiements = co.paiements.filter(x => x.id !== paiementId);
+        saveData();
+        logActivity(`Paiement supprimé : ${formatMoney(p.montant)}`, 'config');
+        toast('Paiement supprimé.', 'success');
+        if (currentPage === 'paiements') renderPaiementsPage();
+        if (currentPage === 'compta') renderComptaDashboard();
+        if (found && document.getElementById('crmDrawer').classList.contains('open')) {
+            const idx = found.classe.eleves.indexOf(found.eleve);
+            openEleveFiche(found.classe.id, idx);
+        }
+    });
+}
+
+// Section "Scolarité" de la fiche élève (drawer CRM)
+function crmEleveScolariteHTML(e, classe, classeId, idx) {
+    const esc = Security.escapeHTML;
+    const frais = fraisPourNiveau(classe.niveau);
+    const paye = totalPaye(e.id);
+    const restant = Math.max(0, frais - paye);
+    const paiements = paiementsOf(e.id).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    let liste = '';
+    if (paiements.length) {
+        liste = '<div class="crm-paiements-list">' + paiements.map(p => `
+            <div class="crm-paiement-item">
+                <div>
+                    <strong>${formatMoney(p.montant)}</strong>
+                    <span class="crm-activity-time">${formatDateNaissanceFR(p.date)} · ${esc(p.motif || '')} · ${esc(p.mode || '')}</span>
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="confirmDeletePaiement('${p.id}')" title="Supprimer">&#10005;</button>
+            </div>`).join('') + '</div>';
+    }
+    return `
+        <div class="crm-section">
+            <h4>Scolarité (${formatMoney(frais)} / an)</h4>
+            ${crmInfoRow('Payé', '<strong>' + formatMoney(paye) + '</strong>')}
+            ${crmInfoRow('Restant', restant > 0 ? '<strong style="color:var(--danger,#ef4444);">' + formatMoney(restant) + '</strong>' : '<strong style="color:var(--success,#10b981);">Soldé</strong>')}
+            ${liste}
+            <button class="btn btn-sm btn-success" style="margin-top:8px;" onclick="showAddPaiementModal('${e.id}')">+ Enregistrer un paiement</button>
+        </div>`;
+}
+
+// ---------- Dépenses ----------
+function renderDepensesPage() {
+    const co = getComptaData();
+    const esc = Security.escapeHTML;
+    const tbody = document.querySelector('#depensesTable tbody');
+    const total = co.depenses.reduce((s, d) => s + (d.montant || 0), 0);
+    document.getElementById('depensesTotal').textContent = formatMoney(total);
+    if (co.depenses.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-secondary);">Aucune dépense enregistrée.</td></tr>';
+        return;
+    }
+    const tri = [...co.depenses].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    tbody.innerHTML = tri.map(d => `<tr>
+        <td>${formatDateNaissanceFR(d.date)}</td>
+        <td>${esc(d.libelle)}</td>
+        <td><span class="classe-chip">${esc(d.categorie || 'Autre')}</span></td>
+        <td class="money-cell">${formatMoney(d.montant)}</td>
+        <td class="no-print">
+            <button class="btn btn-sm btn-info" onclick="editDepense('${d.id}')">Modifier</button>
+            <button class="btn btn-sm btn-danger" onclick="confirmDeleteDepense('${d.id}')">Supprimer</button>
+        </td>
+    </tr>`).join('');
+}
+
+function showAddDepenseModal() {
+    document.getElementById('depenseModalTitle').textContent = 'Ajouter une dépense';
+    document.getElementById('editDepenseId').value = '';
+    document.getElementById('depenseDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('depenseLibelle').value = '';
+    document.getElementById('depenseCategorie').value = 'Fournitures';
+    document.getElementById('depenseMontant').value = '';
+    document.getElementById('depenseModal').classList.add('show');
+}
+
+function editDepense(id) {
+    const d = getComptaData().depenses.find(d => d.id === id);
+    if (!d) return;
+    document.getElementById('depenseModalTitle').textContent = 'Modifier la dépense';
+    document.getElementById('editDepenseId').value = d.id;
+    document.getElementById('depenseDate').value = d.date || '';
+    document.getElementById('depenseLibelle').value = d.libelle;
+    document.getElementById('depenseCategorie').value = d.categorie || 'Autre';
+    document.getElementById('depenseMontant').value = d.montant;
+    document.getElementById('depenseModal').classList.add('show');
+}
+
+function saveDepense() {
+    const co = getComptaData();
+    const id = document.getElementById('editDepenseId').value;
+    const libelle = document.getElementById('depenseLibelle').value.trim();
+    const montant = parseInt(document.getElementById('depenseMontant').value, 10);
+    if (!libelle) { toast('Le libellé est requis.', 'warning'); return; }
+    if (!montant || montant <= 0) { toast('Saisissez un montant valide.', 'warning'); return; }
+    const data = {
+        date: document.getElementById('depenseDate').value || new Date().toISOString().slice(0, 10),
+        libelle: libelle,
+        categorie: document.getElementById('depenseCategorie').value,
+        montant: montant
+    };
+    if (id) {
+        const d = co.depenses.find(d => d.id === id);
+        if (!d) return;
+        Object.assign(d, data);
+        logActivity(`Dépense modifiée : ${libelle} (${formatMoney(montant)})`, 'config');
+        toast('Dépense modifiée.', 'success');
+    } else {
+        co.depenses.push(Object.assign({ id: ecoleUid('de_') }, data));
+        logActivity(`Dépense ajoutée : ${libelle} (${formatMoney(montant)})`, 'config');
+        toast('Dépense ajoutée.', 'success');
+    }
+    saveData();
+    closeModal('depenseModal');
+    if (currentPage === 'depenses') renderDepensesPage();
+    if (currentPage === 'compta') renderComptaDashboard();
+}
+
+function confirmDeleteDepense(id) {
+    const co = getComptaData();
+    const d = co.depenses.find(d => d.id === id);
+    if (!d) return;
+    showConfirm('Supprimer la dépense', `Supprimer « ${d.libelle} » (${formatMoney(d.montant)}) ?`, () => {
+        co.depenses = co.depenses.filter(x => x.id !== id);
+        saveData();
+        logActivity(`Dépense supprimée : ${d.libelle}`, 'config');
+        toast('Dépense supprimée.', 'success');
+        renderDepensesPage();
+    });
 }
