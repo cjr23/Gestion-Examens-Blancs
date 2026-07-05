@@ -592,6 +592,20 @@ function cycleOfNiveau(niveau) {
     return CYCLES.moyen.niveaux.includes(niveau) ? 'moyen' : 'secondaire';
 }
 
+// Matières des bulletins scolaires (modifiables dans Mon École)
+const ECOLE_MATIERES_DEFAUT = [
+    { nom: 'Français', code: 'FR', coef: 1 },
+    { nom: 'Maths', code: 'MATH', coef: 1 },
+    { nom: 'Anglais', code: 'ANG', coef: 1 },
+    { nom: 'Histoire et Géo', code: 'HG', coef: 1 },
+    { nom: 'S.V.T.', code: 'SVT', coef: 1 },
+    { nom: 'P.C.', code: 'PC', coef: 1 },
+    { nom: 'Économie', code: 'ECO', coef: 1 },
+    { nom: 'Informatique', code: 'INFO', coef: 1 },
+    { nom: 'Morale et Catéchèse', code: 'MOR', coef: 1 }
+];
+const TRIMESTRES = { t1: '1er Trimestre', t2: '2ème Trimestre', t3: '3ème Trimestre' };
+
 function moduleOfPage(pageId) {
     return Object.keys(MODULES).find(m => MODULES[m].pages.includes(pageId)) || null;
 }
@@ -4743,6 +4757,10 @@ function getEcoleData() {
     if (!appData.ecole.direction) appData.ecole.direction = { directeur: '', prefetMoyen: '', prefetSecondaire: '' };
     // Inscriptions en attente de validation par la comptabilité
     if (!Array.isArray(appData.ecole.preinscriptions)) appData.ecole.preinscriptions = [];
+    // Matières des bulletins scolaires
+    if (!Array.isArray(appData.ecole.matieres) || appData.ecole.matieres.length === 0) {
+        appData.ecole.matieres = JSON.parse(JSON.stringify(ECOLE_MATIERES_DEFAUT));
+    }
     return appData.ecole;
 }
 
@@ -4795,6 +4813,7 @@ function renderEcolePage() {
         <div class="stat-card orange"><div class="number">${ec.professeurs.length}</div><div class="label">Professeurs</div><div class="pct">${nbPerm} perm. · ${nbVac} vac.</div></div>`;
     renderEcoleNiveaux(ec);
     renderEcoleActivite();
+    renderEcoleMatieres();
 }
 
 function saveDirection() {
@@ -4876,6 +4895,7 @@ let currentClasseId = null;
 function renderClassesPage() {
     const ec = getEcoleData();
     const classe = currentClasseId ? ec.classes.find(c => c.id === currentClasseId) : null;
+    if (classe && classeNotesMode) { renderClasseNotes(classe); return; }
     if (classe) { renderClasseDetail(classe); return; }
     currentClasseId = null;
     document.getElementById('classesTitle').textContent = 'Gestion des Classes';
@@ -4949,6 +4969,8 @@ function renderClasseDetail(classe) {
         <div class="btn-group no-print">
             <button class="btn btn-outline" onclick="closeClasseDetail()">&larr; Toutes les classes</button>
             <button class="btn btn-primary" onclick="showAddEleveModal('${classe.id}')">+ Inscrire un élève</button>
+            <button class="btn btn-info" onclick="openClasseNotes('${classe.id}')">Notes de la classe</button>
+            <button class="btn btn-warning" onclick="genererBulletinsClasse('${classe.id}')">Générer les bulletins</button>
         </div>
         <div class="alert alert-info">
             Niveau : <strong>${Security.escapeHTML(classe.niveau)}</strong>
@@ -4978,8 +5000,8 @@ function renderClasseDetail(classe) {
     document.getElementById('classesContent').innerHTML = html;
 }
 
-function openClasseDetail(id) { currentClasseId = id; renderClassesPage(); }
-function closeClasseDetail() { currentClasseId = null; renderClassesPage(); }
+function openClasseDetail(id) { currentClasseId = id; classeNotesMode = false; renderClassesPage(); }
+function closeClasseDetail() { currentClasseId = null; classeNotesMode = false; renderClassesPage(); }
 
 function populateClasseProfSelect(selectedId) {
     const ec = getEcoleData();
@@ -5454,6 +5476,205 @@ function saveProfNotes(id) {
     p.notes = document.getElementById('crmNotesArea').value.trim();
     saveData();
     toast('Notes enregistrées.', 'success');
+}
+
+// ---------- Notes de classe & bulletins scolaires ----------
+// Vue "Notes" à l'intérieur d'une classe (false = fiche classe normale)
+let classeNotesMode = false;
+// Trimestre affiché / imprimé
+let currentTrimestre = 't1';
+
+function openClasseNotes(id) { currentClasseId = id; classeNotesMode = true; renderClassesPage(); }
+function closeClasseNotes() { classeNotesMode = false; renderClassesPage(); }
+
+function setTrimestre(t) { currentTrimestre = t; renderClassesPage(); }
+
+// Notes du trimestre courant pour une classe : { eleveId: { codeMatiere: note } }
+function getClasseNotes(classe) {
+    if (!classe.notes) classe.notes = {};
+    if (!classe.notes[currentTrimestre]) classe.notes[currentTrimestre] = {};
+    return classe.notes[currentTrimestre];
+}
+
+// Moyenne pondérée d'un élève (sur les matières notées uniquement)
+function moyenneEleve(classe, eleveId) {
+    const ec = getEcoleData();
+    const notes = getClasseNotes(classe)[eleveId] || {};
+    let pts = 0, coefs = 0;
+    ec.matieres.forEach(m => {
+        const n = parseFloat(notes[m.code]);
+        if (!isNaN(n)) { pts += n * (m.coef || 1); coefs += (m.coef || 1); }
+    });
+    return coefs > 0 ? pts / coefs : null;
+}
+
+function appreciationNote(n) {
+    if (n >= 16) return 'Excellent';
+    if (n >= 14) return 'Très Bien';
+    if (n >= 12) return 'Bien';
+    if (n >= 10) return 'Assez Bien';
+    if (n >= 8) return 'Insuffisant';
+    return 'Faible';
+}
+
+function renderClasseNotes(classe) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    document.getElementById('classesTitle').textContent = 'Notes — ' + classe.nom;
+    const notes = getClasseNotes(classe);
+    let html = `
+        <div class="btn-group no-print">
+            <button class="btn btn-outline" onclick="closeClasseNotes()">&larr; Fiche de la classe</button>
+            <button class="btn btn-warning" onclick="genererBulletinsClasse('${classe.id}')">Générer les bulletins</button>
+        </div>
+        <div class="form-row no-print">
+            <div class="form-group"><label>Trimestre</label>
+                <select onchange="setTrimestre(this.value)" style="width:180px;">
+                    ${Object.keys(TRIMESTRES).map(t => `<option value="${t}"${t === currentTrimestre ? ' selected' : ''}>${TRIMESTRES[t]}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+        <div class="alert alert-info">Notes sur 20 — sauvegarde automatique. La moyenne est pondérée par les coefficients (modifiables dans Mon École).</div>`;
+    if (classe.eleves.length === 0) {
+        html += '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
+        document.getElementById('classesContent').innerHTML = html;
+        return;
+    }
+    html += '<div class="table-wrapper"><table><thead><tr><th style="text-align:left;">Élève</th>';
+    ec.matieres.forEach(m => { html += `<th title="${esc(m.nom)} (coef ${m.coef})">${esc(m.code)}</th>`; });
+    html += '<th>Moyenne</th></tr></thead><tbody>';
+    classe.eleves.forEach(e => {
+        const en = notes[e.id] || {};
+        html += `<tr><td style="text-align:left; white-space:nowrap;"><span class="crm-name-cell">${crmAvatar(e.prenom, e.nom)}<span>${esc(e.prenom)} <strong>${esc(e.nom)}</strong></span></span></td>`;
+        ec.matieres.forEach(m => {
+            const v = en[m.code] !== undefined ? en[m.code] : '';
+            html += `<td><input type="number" class="ecole-note-input" min="0" max="20" step="0.25" value="${v}"
+                onchange="setEcoleNote('${classe.id}', '${e.id}', '${m.code}', this.value)"></td>`;
+        });
+        const moy = moyenneEleve(classe, e.id);
+        html += `<td class="ecole-moy-cell" id="moy-${e.id}"><strong>${moy !== null ? moy.toFixed(2) : '—'}</strong></td></tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('classesContent').innerHTML = html;
+}
+
+function setEcoleNote(classeId, eleveId, code, value) {
+    const classe = getEcoleData().classes.find(c => c.id === classeId);
+    if (!classe) return;
+    const notes = getClasseNotes(classe);
+    if (!notes[eleveId]) notes[eleveId] = {};
+    const n = parseFloat(value);
+    if (value === '' || isNaN(n)) {
+        delete notes[eleveId][code];
+    } else {
+        notes[eleveId][code] = Math.max(0, Math.min(20, n));
+    }
+    debouncedSave();
+    const moy = moyenneEleve(classe, eleveId);
+    const cell = document.getElementById('moy-' + eleveId);
+    if (cell) cell.innerHTML = '<strong>' + (moy !== null ? moy.toFixed(2) : '—') + '</strong>';
+}
+
+function genererBulletinsClasse(classeId) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) return;
+    if (classe.eleves.length === 0) { toast('Aucun élève dans cette classe.', 'warning'); return; }
+    // Classement de la classe sur le trimestre courant
+    const moyennes = classe.eleves
+        .map(e => ({ eleve: e, moy: moyenneEleve(classe, e.id) }))
+        .filter(x => x.moy !== null)
+        .sort((a, b) => b.moy - a.moy);
+    if (moyennes.length === 0) {
+        toast('Aucune note saisie pour ce trimestre. Saisissez d\'abord les notes de la classe.', 'warning');
+        return;
+    }
+    const rangs = {};
+    moyennes.forEach((x, i) => { rangs[x.eleve.id] = i + 1; });
+    const prefet = cycleOfNiveau(classe.niveau) === 'moyen' ? ec.direction.prefetMoyen : ec.direction.prefetSecondaire;
+    const notes = getClasseNotes(classe);
+    let html = '';
+    classe.eleves.forEach((e, idx) => {
+        const en = notes[e.id] || {};
+        const moy = moyenneEleve(classe, e.id);
+        html += `<div class="bulletin-page" ${idx > 0 ? 'style="page-break-before:always; margin-top:30px;"' : ''}>`;
+        html += docHeader('BULLETIN DE NOTES', `Année scolaire ${appData.year} — ${esc(classe.nom)} — ${TRIMESTRES[currentTrimestre]}`);
+        html += `<div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding:10px; background:#f5efe8; border-radius:8px;">
+            <div><b>Nom :</b> ${esc(e.nom)}</div>
+            <div><b>Prénom(s) :</b> ${esc(e.prenom)}</div>
+            <div><b>Sexe :</b> ${e.sexe === 'F' ? 'F' : 'M'}</div>
+            <div><b>Né(e) le :</b> ${formatDateNaissanceFR(e.dateNaissance)}</div>
+            <div><b>Effectif :</b> ${classe.eleves.length}</div>
+        </div>`;
+        html += `<table><thead><tr><th style="text-align:left;">Matière</th><th>Coef</th><th>Note /20</th><th>Note × Coef</th><th>Appréciation</th></tr></thead><tbody>`;
+        let totalPts = 0, totalCoefs = 0;
+        ec.matieres.forEach(m => {
+            const n = parseFloat(en[m.code]);
+            if (isNaN(n)) {
+                html += `<tr><td style="text-align:left;">${esc(m.nom)}</td><td>${m.coef}</td><td>—</td><td>—</td><td>—</td></tr>`;
+            } else {
+                totalPts += n * (m.coef || 1);
+                totalCoefs += (m.coef || 1);
+                html += `<tr><td style="text-align:left;">${esc(m.nom)}</td><td>${m.coef}</td><td>${n.toFixed(2)}</td><td>${(n * (m.coef || 1)).toFixed(2)}</td><td>${appreciationNote(n)}</td></tr>`;
+            }
+        });
+        html += `</tbody></table>`;
+        html += `<div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:12px; padding:12px; background:#f5efe8; border-radius:8px; font-weight:700;">
+            <div>Total : ${totalPts.toFixed(2)} / ${totalCoefs * 20}</div>
+            <div>Moyenne : ${moy !== null ? moy.toFixed(2) : '—'} / 20</div>
+            <div>Rang : ${rangs[e.id] ? rangs[e.id] + ' / ' + moyennes.length : '—'}</div>
+            <div>${moy !== null ? appreciationNote(moy) : ''}</div>
+        </div>`;
+        html += `<div style="display:flex; justify-content:space-between; margin-top:28px; padding:0 20px; font-size:0.9em;">
+            <div style="text-align:center;">Le Préfet de cycle<br><br><br>${prefet ? '<b>' + esc(prefet) + '</b>' : ''}</div>
+            <div style="text-align:center;">Le Directeur<br><br><br>${ec.direction.directeur ? '<b>' + esc(ec.direction.directeur) + '</b>' : ''}</div>
+        </div>`;
+        html += `</div>`;
+    });
+    document.getElementById('printModalTitle').textContent = `Bulletins ${classe.nom} — ${TRIMESTRES[currentTrimestre]}`;
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity(`Bulletins générés : ${classe.nom} (${TRIMESTRES[currentTrimestre]})`, 'export');
+}
+
+// ---------- Matières des bulletins (Mon École) ----------
+function renderEcoleMatieres() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('ecoleMatieres');
+    if (!box) return;
+    box.innerHTML = `<table><thead><tr><th style="text-align:left;">Matière</th><th>Code</th><th>Coefficient</th><th class="no-print">Actions</th></tr></thead><tbody>` +
+        ec.matieres.map((m, i) => `<tr>
+            <td><input type="text" value="${esc(m.nom)}" data-mat="${i}" class="matiere-nom" style="width:200px;"></td>
+            <td><input type="text" value="${esc(m.code)}" data-mat="${i}" class="matiere-code" style="width:80px; text-transform:uppercase;"></td>
+            <td><input type="number" value="${m.coef}" min="1" max="10" data-mat="${i}" class="matiere-coef" style="width:70px;"></td>
+            <td class="no-print"><button class="btn btn-sm btn-danger" onclick="removeEcoleMatiere(${i})">Supprimer</button></td>
+        </tr>`).join('') + '</tbody></table>';
+}
+
+function addEcoleMatiere() {
+    const ec = getEcoleData();
+    ec.matieres.push({ nom: 'Nouvelle matière', code: 'MAT' + (ec.matieres.length + 1), coef: 1 });
+    renderEcoleMatieres();
+}
+
+function removeEcoleMatiere(idx) {
+    const ec = getEcoleData();
+    if (ec.matieres.length <= 1) { toast('Il faut au moins une matière.', 'warning'); return; }
+    ec.matieres.splice(idx, 1);
+    renderEcoleMatieres();
+}
+
+function saveEcoleMatieres() {
+    const ec = getEcoleData();
+    document.querySelectorAll('.matiere-nom').forEach(el => { ec.matieres[el.dataset.mat].nom = el.value.trim() || 'Matière'; });
+    document.querySelectorAll('.matiere-code').forEach(el => { ec.matieres[el.dataset.mat].code = (el.value.trim() || 'MAT').toUpperCase(); });
+    document.querySelectorAll('.matiere-coef').forEach(el => { ec.matieres[el.dataset.mat].coef = Math.max(1, parseInt(el.value, 10) || 1); });
+    saveData();
+    logActivity('Matières des bulletins mises à jour', 'config');
+    toast('Matières sauvegardées.', 'success');
+    renderEcoleMatieres();
 }
 
 // ================================================================

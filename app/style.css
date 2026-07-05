@@ -4830,3 +4830,7 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
     font-size: 0.72em; font-weight: 800; border-radius: 999px;
 }
 .app-shell.collapsed .sidebar-nav .nav-badge { display: none; }
+
+/* Saisie des notes de classe (bulletins scolaires) */
+.ecole-note-input { width: 62px; text-align: center; padding: 6px 4px; }
+.ecole-moy-cell { font-variant-numeric: tabular-nums; }

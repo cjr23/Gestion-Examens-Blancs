@@ -589,6 +589,15 @@
             </div>
         </div>
         <div class="card">
+            <h2>Matières des Bulletins</h2>
+            <div class="alert alert-info" style="font-size:0.85em;">Ces matières et coefficients sont utilisés pour la saisie des notes de classe et la génération des bulletins.</div>
+            <div id="ecoleMatieres"></div>
+            <div class="btn-group" style="margin-top:10px;">
+                <button class="btn btn-primary" onclick="addEcoleMatiere()">+ Ajouter une matière</button>
+                <button class="btn btn-success" onclick="saveEcoleMatieres()">Sauvegarder les matières</button>
+            </div>
+        </div>
+        <div class="card">
             <h2>Informations de l'École</h2>
             <div class="form-row">
                 <div class="form-group"><label>Nom de l'établissement</label><input type="text" id="ecoleNom" style="width:300px;"></div>
