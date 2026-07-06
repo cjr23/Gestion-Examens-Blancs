@@ -573,7 +573,7 @@ let currentPage = 'dashboard';
 // Chaque module a sa propre navigation ; les pages "Système" sont communes.
 const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
-    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'professeurs', 'emploiTemps'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'notesBulletins', 'professeurs', 'emploiTemps'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
     compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'depenses'] }
 };
@@ -737,6 +737,7 @@ function refreshCurrentPage() {
     if (currentPage === 'ecole') renderEcolePage();
     if (currentPage === 'classes') renderClassesPage();
     if (currentPage === 'professeurs') renderProfsTable();
+    if (currentPage === 'notesBulletins') renderNotesBulletinsPage();
     if (currentPage === 'emploiTemps') renderEmploiTempsPage();
     if (currentPage === 'personnel') renderPersonnelTable();
     if (currentPage === 'compta') renderComptaDashboard();
@@ -5504,9 +5505,8 @@ function openProfFiche(id) {
         <div class="crm-section">
             <h4>Emploi du temps</h4>
             ${crmInfoRow('Heures affectées', '<strong>' + countProfHeures(p.id) + ' h / semaine</strong>')}
-            ${profStatut(p) === 'Permanent'
-                ? crmInfoRow('Heures fixées', p.heuresSemaine ? p.heuresSemaine + ' h / semaine' : '—')
-                : crmInfoRow('Disponibilités', (p.disponibilites || []).length + ' créneau(x)')}
+            ${crmInfoRow('Heures fixées', p.heuresSemaine ? p.heuresSemaine + ' h / semaine' : '—')}
+            ${profStatut(p) === 'Vacataire' ? crmInfoRow('Disponibilités', (p.disponibilites || []).length + ' créneau(x)') : ''}
         </div>
         <div class="crm-section">
             <h4>Notes internes</h4>
@@ -5584,12 +5584,20 @@ function renderClasseNotes(classe) {
             </div>
         </div>
         <div class="alert alert-info">Notes sur 20 — sauvegarde automatique. La moyenne est pondérée par les coefficients (modifiables dans Mon École).</div>`;
+    html += notesTableHTML(classe);
+    document.getElementById('classesContent').innerHTML = html;
+}
+
+// Table de saisie des notes d'une classe (partagée entre la vue Classes
+// et la page Notes & Bulletins) pour le trimestre courant.
+function notesTableHTML(classe) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
     if (classe.eleves.length === 0) {
-        html += '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
-        document.getElementById('classesContent').innerHTML = html;
-        return;
+        return '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
     }
-    html += '<div class="table-wrapper"><table><thead><tr><th style="text-align:left;">Élève</th>';
+    const notes = getClasseNotes(classe);
+    let html = '<div class="table-wrapper"><table><thead><tr><th style="text-align:left;">Élève</th>';
     ec.matieres.forEach(m => { html += `<th title="${esc(m.nom)} (coef ${m.coef})">${esc(m.code)}</th>`; });
     html += '<th>Moyenne</th></tr></thead><tbody>';
     classe.eleves.forEach(e => {
@@ -5603,8 +5611,41 @@ function renderClasseNotes(classe) {
         const moy = moyenneEleve(classe, e.id);
         html += `<td class="ecole-moy-cell" id="moy-${e.id}"><strong>${moy !== null ? moy.toFixed(2) : '—'}</strong></td></tr>`;
     });
-    html += '</tbody></table></div>';
-    document.getElementById('classesContent').innerHTML = html;
+    return html + '</tbody></table></div>';
+}
+
+// ---------- Page Notes & Bulletins (menu École) ----------
+function renderNotesBulletinsPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('nbClasseSelect');
+    const selTrim = document.getElementById('nbTrimestreSelect');
+    const content = document.getElementById('nbContent');
+    selTrim.innerHTML = Object.keys(TRIMESTRES).map(t =>
+        `<option value="${t}"${t === currentTrimestre ? ' selected' : ''}>${TRIMESTRES[t]}</option>`).join('');
+    if (ec.classes.length === 0) {
+        sel.innerHTML = '';
+        content.innerHTML = '<div class="empty-state"><p>Créez d\'abord des classes et inscrivez des élèves.</p></div>';
+        return;
+    }
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    const prev = sel.value;
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const cls = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (cls.length === 0) return '';
+        return `<optgroup label="${CYCLES[cy].label}">` +
+            cls.map(c => `<option value="${c.id}">${esc(c.nom)} (${c.eleves.length} élève(s))</option>`).join('') + '</optgroup>';
+    }).join('');
+    if (prev && tri.some(c => c.id === prev)) sel.value = prev;
+    const classe = ec.classes.find(c => c.id === sel.value) || tri[0];
+    content.innerHTML = notesTableHTML(classe);
+}
+
+function genererBulletinsDepuisPage() {
+    const cid = document.getElementById('nbClasseSelect').value;
+    if (!cid) { toast('Créez d\'abord une classe.', 'warning'); return; }
+    genererBulletinsClasse(cid);
 }
 
 function setEcoleNote(classeId, eleveId, code, value) {
@@ -5773,32 +5814,47 @@ function renderEdtCharge() {
         box.innerHTML = '<div class="empty-state"><p>Aucun professeur enregistré.</p></div>';
         return;
     }
-    box.innerHTML = `<div class="table-wrapper"><table>
-        <thead><tr><th style="text-align:left;">Professeur</th><th>Statut</th><th>Heures affectées</th><th>Heures fixées / Disponibilités</th><th>Situation</th></tr></thead><tbody>` +
+    box.innerHTML = `<div class="alert alert-info" style="font-size:0.85em;">Saisissez le nombre d'heures hebdomadaires de chaque professeur directement dans la colonne « Heures fixées ».</div>
+    <div class="table-wrapper"><table>
+        <thead><tr><th style="text-align:left;">Professeur</th><th>Statut</th><th>Heures affectées</th><th>Heures fixées / sem</th><th>Disponibilités</th><th>Situation</th></tr></thead><tbody>` +
         ec.professeurs.map(p => {
             const st = profStatut(p);
             const affectees = countProfHeures(p.id);
-            let ref, situation;
-            if (st === 'Permanent') {
-                ref = p.heuresSemaine ? p.heuresSemaine + ' h/sem fixées' : '<em>non fixées</em>';
-                if (!p.heuresSemaine) situation = '<span class="pay-badge">—</span>';
-                else if (affectees > p.heuresSemaine) situation = '<span class="pay-badge none">Dépassement</span>';
+            const dispos = (p.disponibilites || []).length;
+            let situation;
+            if (p.heuresSemaine) {
+                if (affectees > p.heuresSemaine) situation = '<span class="pay-badge none">Dépassement</span>';
                 else if (affectees === p.heuresSemaine) situation = '<span class="pay-badge ok">Complet</span>';
                 else situation = `<span class="pay-badge partial">${p.heuresSemaine - affectees} h restantes</span>`;
-            } else {
-                const dispos = (p.disponibilites || []).length;
-                ref = dispos + ' créneau(x) disponible(s)';
+            } else if (st === 'Vacataire') {
                 situation = dispos === 0 ? '<span class="pay-badge none">Aucune dispo</span>'
-                    : `<span class="pay-badge ${affectees >= dispos ? 'ok' : 'partial'}">${affectees}/${dispos} utilisés</span>`;
+                    : `<span class="pay-badge ${affectees >= dispos ? 'ok' : 'partial'}">${affectees}/${dispos} créneau(x) utilisés</span>`;
+            } else {
+                situation = '<span class="pay-badge">Heures non fixées</span>';
             }
             return `<tr class="crm-row" onclick="openProfFiche('${p.id}')">
                 <td><span class="crm-name-cell">${crmAvatar(p.prenom, p.nom)}<span>${esc(p.prenom)} <strong>${esc(p.nom)}</strong></span></span></td>
                 <td><span class="statut-badge ${st === 'Permanent' ? 'permanent' : 'vacataire'}">${st}</span></td>
                 <td style="text-align:center;"><strong>${affectees} h</strong></td>
-                <td>${ref}</td>
+                <td onclick="event.stopPropagation()">
+                    <input type="number" class="edt-heures-input" min="0" max="40" value="${p.heuresSemaine || ''}"
+                        placeholder="—" onchange="setProfHeures('${p.id}', this.value)"> h
+                </td>
+                <td>${st === 'Vacataire' ? dispos + ' créneau(x) coché(s)' : '—'}</td>
                 <td>${situation}</td>
             </tr>`;
         }).join('') + '</tbody></table></div>';
+}
+
+// Fixe le volume d'heures hebdomadaire d'un professeur depuis la page EDT
+function setProfHeures(profId, value) {
+    const p = getEcoleData().professeurs.find(p => p.id === profId);
+    if (!p) return;
+    p.heuresSemaine = Math.max(0, parseInt(value, 10) || 0);
+    saveData();
+    logActivity(`Heures fixées pour ${p.prenom} ${p.nom} : ${p.heuresSemaine} h/semaine`, 'config');
+    toast(`${p.prenom} ${p.nom} : ${p.heuresSemaine ? p.heuresSemaine + ' h/semaine fixées.' : 'heures effacées.'}`, 'success');
+    renderEdtCharge();
 }
 
 function openSlotModal(classeId, jour, creneau) {

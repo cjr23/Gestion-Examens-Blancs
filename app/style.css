@@ -4860,3 +4860,6 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 .dispo-check { cursor: pointer; width: 15px; height: 15px; }
 
 [data-theme="dark"] .edt-cell.edt-empty { color: #5c4a38; }
+
+/* Saisie des heures fixées dans le tableau de charge horaire (page EDT) */
+.edt-heures-input { width: 64px; text-align: center; padding: 5px 4px; }
