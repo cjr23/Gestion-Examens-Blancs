@@ -728,8 +728,8 @@
         </div>
         <div class="crm-two-col">
             <div class="card">
-                <h2>Frais de scolarité par niveau (F CFA / an)</h2>
-                <div class="alert alert-info" style="font-size:0.85em;">Le montant attendu par élève dépend du niveau de sa classe. Laissez à 0 les niveaux non concernés.</div>
+                <h2>Frais par niveau (F CFA)</h2>
+                <div class="alert alert-info" style="font-size:0.85em;">Pour chaque niveau : frais d'<strong>inscription</strong> (une fois), <strong>scolarité</strong> mensuelle et <strong>cours de renforcement</strong> mensuels (obligatoires) — 9 mensualités d'octobre à juin. Laissez à 0 les frais non concernés.</div>
                 <div id="fraisNiveaux"></div>
                 <button class="btn btn-success" onclick="saveFraisNiveaux()" style="margin-top:10px;">Sauvegarder les frais</button>
             </div>
@@ -1100,13 +1100,17 @@
         <div class="form-group"><label>Montant (F CFA)</label><input type="number" id="paiementMontant" min="1" step="500"></div>
         <div class="form-group"><label>Date</label><input type="date" id="paiementDate"></div>
         <div class="form-group"><label>Motif</label>
-            <select id="paiementMotif" style="width:100%;">
-                <option value="Scolarité">Scolarité</option>
+            <select id="paiementMotif" style="width:100%;" onchange="togglePaiementMois()">
+                <option value="Scolarité">Scolarité (mensualité)</option>
+                <option value="Renforcement">Cours de renforcement (mensualité)</option>
                 <option value="Inscription">Inscription</option>
                 <option value="Cantine">Cantine</option>
                 <option value="Transport">Transport</option>
                 <option value="Autre">Autre</option>
             </select>
+        </div>
+        <div class="form-group" id="paiementMoisGroup"><label>Mois concerné</label>
+            <select id="paiementMois" style="width:100%;"></select>
         </div>
         <div class="form-group"><label>Mode de paiement</label>
             <select id="paiementMode" style="width:100%;">

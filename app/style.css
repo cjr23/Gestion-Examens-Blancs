@@ -4863,3 +4863,6 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 
 /* Saisie des heures fixées dans le tableau de charge horaire (page EDT) */
 .edt-heures-input { width: 64px; text-align: center; padding: 5px 4px; }
+
+/* Table des frais par niveau (inscription / scolarité / renforcement) */
+.frais-table input { width: 110px; text-align: right; padding: 6px 8px; }

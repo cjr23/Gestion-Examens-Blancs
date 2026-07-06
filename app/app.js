@@ -6146,12 +6146,23 @@ function savePersonnelNotes(id) {
 // ========== MODULE COMPTABILITÉ (frais, paiements, dépenses) ====
 // ================================================================
 
+// Année scolaire : 9 mensualités d'octobre à juin
+const MOIS_SCOLAIRES = ['Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin'];
+
 function getComptaData() {
     if (!appData.compta) appData.compta = { fraisParNiveau: {}, paiements: [], depenses: [] };
     const c = appData.compta;
     if (!c.fraisParNiveau) c.fraisParNiveau = {};
     if (!Array.isArray(c.paiements)) c.paiements = [];
     if (!Array.isArray(c.depenses)) c.depenses = [];
+    // Migration de l'ancien format (montant annuel unique de scolarité)
+    // vers le triptyque inscription / mensualité scolarité / mensualité renforcement.
+    Object.keys(c.fraisParNiveau).forEach(n => {
+        const v = c.fraisParNiveau[n];
+        if (typeof v === 'number') {
+            c.fraisParNiveau[n] = { inscription: 0, mensualite: Math.round(v / MOIS_SCOLAIRES.length), renforcement: 0 };
+        }
+    });
     return c;
 }
 
@@ -6188,7 +6199,31 @@ function totalPaye(eleveId) {
 }
 
 function fraisPourNiveau(niveau) {
-    return parseInt(getComptaData().fraisParNiveau[niveau], 10) || 0;
+    const f = getComptaData().fraisParNiveau[niveau] || {};
+    return {
+        inscription: parseInt(f.inscription, 10) || 0,
+        mensualite: parseInt(f.mensualite, 10) || 0,
+        renforcement: parseInt(f.renforcement, 10) || 0
+    };
+}
+
+// Coût annuel complet d'un élève du niveau : inscription + 9 mensualités
+// de scolarité + 9 mensualités de cours de renforcement (obligatoires).
+function totalAnnuelNiveau(niveau) {
+    const f = fraisPourNiveau(niveau);
+    return f.inscription + MOIS_SCOLAIRES.length * (f.mensualite + f.renforcement);
+}
+
+function totalPayeMotif(eleveId, motif) {
+    return getComptaData().paiements
+        .filter(p => p.eleveId === eleveId && p.motif === motif)
+        .reduce((s, p) => s + (p.montant || 0), 0);
+}
+
+// Nombre de mensualités couvertes par les paiements (les versements partiels s'additionnent)
+function moisPayes(eleveId, motif, mensualite) {
+    if (mensualite <= 0) return 0;
+    return Math.min(MOIS_SCOLAIRES.length, Math.floor(totalPayeMotif(eleveId, motif) / mensualite));
 }
 
 // ---------- Vue d'ensemble ----------
@@ -6196,7 +6231,7 @@ function renderComptaDashboard() {
     const ec = getEcoleData();
     const co = getComptaData();
     let attendu = 0;
-    ec.classes.forEach(c => attendu += c.eleves.length * fraisPourNiveau(c.niveau));
+    ec.classes.forEach(c => attendu += c.eleves.length * totalAnnuelNiveau(c.niveau));
     const encaisse = co.paiements.reduce((s, p) => s + (p.montant || 0), 0);
     const depenses = co.depenses.reduce((s, d) => s + (d.montant || 0), 0);
     const solde = encaisse - depenses;
@@ -6214,24 +6249,31 @@ function renderComptaDashboard() {
 }
 
 function renderFraisNiveaux() {
-    const co = getComptaData();
     const box = document.getElementById('fraisNiveaux');
-    box.innerHTML = CLASSE_NIVEAUX.map(niv => `
-        <div class="frais-row">
-            <label>${Security.escapeHTML(niv)}</label>
-            <input type="number" min="0" step="500" class="frais-input" data-niveau="${Security.escapeHTML(niv)}" value="${fraisPourNiveau(niv)}">
-            <span class="frais-unit">F CFA / an</span>
-        </div>`).join('');
+    const esc = Security.escapeHTML;
+    box.innerHTML = `<div class="table-wrapper"><table class="frais-table">
+        <thead><tr><th style="text-align:left;">Niveau</th><th>Inscription</th><th>Scolarité / mois</th><th>Renforcement / mois</th><th style="text-align:right;">Total annuel</th></tr></thead><tbody>` +
+        CLASSE_NIVEAUX.map(niv => {
+            const f = fraisPourNiveau(niv);
+            return `<tr>
+                <td><strong>${esc(niv)}</strong></td>
+                <td><input type="number" min="0" step="500" class="frais-input" data-niveau="${esc(niv)}" data-type="inscription" value="${f.inscription}"></td>
+                <td><input type="number" min="0" step="500" class="frais-input" data-niveau="${esc(niv)}" data-type="mensualite" value="${f.mensualite}"></td>
+                <td><input type="number" min="0" step="500" class="frais-input" data-niveau="${esc(niv)}" data-type="renforcement" value="${f.renforcement}"></td>
+                <td class="money-cell" id="fraisTotal-${esc(niv)}">${formatMoney(totalAnnuelNiveau(niv))}</td>
+            </tr>`;
+        }).join('') + '</tbody></table></div>';
 }
 
 function saveFraisNiveaux() {
     const co = getComptaData();
     document.querySelectorAll('.frais-input').forEach(inp => {
-        co.fraisParNiveau[inp.dataset.niveau] = parseInt(inp.value, 10) || 0;
+        if (!co.fraisParNiveau[inp.dataset.niveau]) co.fraisParNiveau[inp.dataset.niveau] = { inscription: 0, mensualite: 0, renforcement: 0 };
+        co.fraisParNiveau[inp.dataset.niveau][inp.dataset.type] = parseInt(inp.value, 10) || 0;
     });
     saveData();
-    logActivity('Frais de scolarité par niveau mis à jour', 'config');
-    toast('Frais de scolarité sauvegardés.', 'success');
+    logActivity('Frais par niveau mis à jour (inscription, scolarité, renforcement)', 'config');
+    toast('Frais sauvegardés.', 'success');
     renderComptaDashboard();
 }
 
@@ -6252,7 +6294,7 @@ function renderComptaRecents() {
             <span class="crm-activity-dot"></span>
             <div style="flex:1;">
                 <div class="crm-activity-msg"><strong>${formatMoney(p.montant)}</strong> — ${esc(nomEleve)}${found ? ' (' + esc(found.classe.nom) + ')' : ''}</div>
-                <div class="crm-activity-time">${formatDateNaissanceFR(p.date)} · ${esc(p.motif || '')} · ${esc(p.mode || '')}</div>
+                <div class="crm-activity-time">${formatDateNaissanceFR(p.date)} · ${esc(p.motif || '')}${p.mois ? ' (' + esc(p.mois) + ')' : ''} · ${esc(p.mode || '')}</div>
             </div>
         </div>`;
     }).join('') + '</div>';
@@ -6282,26 +6324,39 @@ function renderPaiementsPage() {
     if (prev && tri.some(c => c.id === prev)) sel.value = prev;
     const classe = ec.classes.find(c => c.id === sel.value) || tri[0];
     const frais = fraisPourNiveau(classe.niveau);
+    const annuel = totalAnnuelNiveau(classe.niveau);
     if (classe.eleves.length === 0) {
         content.innerHTML = '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
         return;
     }
-    let totAttendu = 0, totPaye = 0;
+    let totPaye = 0;
+    const totAttendu = annuel * classe.eleves.length;
     let rows = '';
     classe.eleves.forEach((e, i) => {
         const paye = totalPaye(e.id);
-        const restant = Math.max(0, frais - paye);
-        totAttendu += frais; totPaye += paye;
+        totPaye += paye;
+        // Inscription : réglée dès que le montant est couvert
+        let insc;
+        if (frais.inscription === 0) insc = '—';
+        else if (totalPayeMotif(e.id, 'Inscription') >= frais.inscription) insc = '<span class="pay-badge ok">Réglée</span>';
+        else insc = '<span class="pay-badge none">Due</span>';
+        // Mensualités couvertes (scolarité et renforcement obligatoire)
+        const mScol = moisPayes(e.id, 'Scolarité', frais.mensualite);
+        const mRenf = moisPayes(e.id, 'Renforcement', frais.renforcement);
+        const scol = frais.mensualite === 0 ? '—' : `<span class="pay-badge ${mScol >= MOIS_SCOLAIRES.length ? 'ok' : mScol > 0 ? 'partial' : 'none'}">${mScol}/${MOIS_SCOLAIRES.length} mois</span>`;
+        const renf = frais.renforcement === 0 ? '—' : `<span class="pay-badge ${mRenf >= MOIS_SCOLAIRES.length ? 'ok' : mRenf > 0 ? 'partial' : 'none'}">${mRenf}/${MOIS_SCOLAIRES.length} mois</span>`;
         let badge;
-        if (frais === 0) badge = '<span class="pay-badge">—</span>';
-        else if (paye >= frais) badge = '<span class="pay-badge ok">À jour</span>';
-        else if (paye > 0) badge = '<span class="pay-badge partial">Partiel</span>';
+        if (annuel === 0) badge = '<span class="pay-badge">—</span>';
+        else if (paye >= annuel) badge = '<span class="pay-badge ok">Soldé</span>';
+        else if (paye > 0) badge = '<span class="pay-badge partial">En cours</span>';
         else badge = '<span class="pay-badge none">Impayé</span>';
         rows += `<tr class="crm-row" onclick="openEleveFiche('${classe.id}', ${i})" title="Voir la fiche">
             <td><span class="crm-name-cell">${crmAvatar(e.prenom, e.nom)}<span>${esc(e.prenom)} <strong>${esc(e.nom)}</strong></span></span></td>
-            <td class="money-cell">${formatMoney(frais)}</td>
+            <td>${insc}</td>
+            <td>${scol}</td>
+            <td>${renf}</td>
             <td class="money-cell">${formatMoney(paye)}</td>
-            <td class="money-cell">${formatMoney(restant)}</td>
+            <td class="money-cell">${formatMoney(Math.max(0, annuel - paye))}</td>
             <td>${badge}</td>
             <td class="no-print" onclick="event.stopPropagation()">
                 <button class="btn btn-sm btn-success" onclick="showAddPaiementModal('${e.id}')">+ Paiement</button>
@@ -6311,14 +6366,32 @@ function renderPaiementsPage() {
     const pctClasse = totAttendu > 0 ? Math.round(totPaye / totAttendu * 100) : 0;
     content.innerHTML = `
         <div class="alert alert-info">
-            Frais du niveau <strong>${esc(classe.niveau)}</strong> : <strong>${formatMoney(frais)}</strong> / élève / an
-            ${frais === 0 ? ' — <a href="#" onclick="showPage(\'compta\'); return false;">définir les frais</a>' : ''}
-            — Recouvrement de la classe : <strong>${formatMoney(totPaye)}</strong> / ${formatMoney(totAttendu)} (${pctClasse}%)
+            Niveau <strong>${esc(classe.niveau)}</strong> — Inscription : <strong>${formatMoney(frais.inscription)}</strong> ·
+            Scolarité : <strong>${formatMoney(frais.mensualite)}</strong>/mois ·
+            Renforcement (obligatoire) : <strong>${formatMoney(frais.renforcement)}</strong>/mois ·
+            soit <strong>${formatMoney(annuel)}</strong>/an par élève
+            ${annuel === 0 ? ' — <a href="#" onclick="showPage(\'compta\'); return false;">définir les frais</a>' : ''}
+            <br>Recouvrement de la classe : <strong>${formatMoney(totPaye)}</strong> / ${formatMoney(totAttendu)} (${pctClasse}%)
         </div>
         <div class="table-wrapper"><table>
-            <thead><tr><th>Élève</th><th style="text-align:right;">Attendu</th><th style="text-align:right;">Payé</th><th style="text-align:right;">Restant</th><th>Statut</th><th class="no-print">Actions</th></tr></thead>
+            <thead><tr><th>Élève</th><th>Inscription</th><th>Scolarité</th><th>Renforcement</th><th style="text-align:right;">Payé</th><th style="text-align:right;">Restant</th><th>Statut</th><th class="no-print">Actions</th></tr></thead>
             <tbody>${rows}</tbody>
         </table></div>`;
+}
+
+// Le champ "Mois concerné" n'a de sens que pour les mensualités
+function togglePaiementMois() {
+    const motif = document.getElementById('paiementMotif').value;
+    document.getElementById('paiementMoisGroup').style.display =
+        (motif === 'Scolarité' || motif === 'Renforcement') ? '' : 'none';
+}
+
+function populatePaiementMois() {
+    const sel = document.getElementById('paiementMois');
+    // Mois scolaire courant présélectionné (octobre par défaut hors année scolaire)
+    const nomMoisFR = new Date().toLocaleDateString('fr-FR', { month: 'long' });
+    const courant = MOIS_SCOLAIRES.find(m => m.toLowerCase() === nomMoisFR.toLowerCase()) || MOIS_SCOLAIRES[0];
+    sel.innerHTML = MOIS_SCOLAIRES.map(m => `<option value="${m}"${m === courant ? ' selected' : ''}>${m}</option>`).join('');
 }
 
 function showAddPaiementModal(eleveId) {
@@ -6328,11 +6401,14 @@ function showAddPaiementModal(eleveId) {
     document.getElementById('paiementPreId').value = '';
     document.getElementById('paiementEleveNom').textContent =
         found.eleve.prenom + ' ' + found.eleve.nom + ' — ' + found.classe.nom;
-    document.getElementById('paiementMontant').value = '';
+    const frais = fraisPourNiveau(found.classe.niveau);
+    document.getElementById('paiementMontant').value = frais.mensualite || '';
     document.getElementById('paiementDate').value = new Date().toISOString().slice(0, 10);
     document.getElementById('paiementMotif').value = 'Scolarité';
     document.getElementById('paiementMode').value = 'Espèces';
     document.getElementById('paiementNote').value = '';
+    populatePaiementMois();
+    togglePaiementMois();
     document.getElementById('paiementModal').classList.add('show');
 }
 
@@ -6340,6 +6416,8 @@ function savePaiement() {
     const co = getComptaData();
     const montant = parseInt(document.getElementById('paiementMontant').value, 10);
     if (!montant || montant <= 0) { toast('Saisissez un montant valide.', 'warning'); return; }
+    const motif = document.getElementById('paiementMotif').value;
+    const mois = (motif === 'Scolarité' || motif === 'Renforcement') ? document.getElementById('paiementMois').value : '';
     // Validation d'une inscription en attente : l'encaissement affecte l'élève à sa classe
     const preId = document.getElementById('paiementPreId').value;
     if (preId) {
@@ -6351,7 +6429,8 @@ function savePaiement() {
             classeId: res.classe.id,
             montant: montant,
             date: document.getElementById('paiementDate').value || new Date().toISOString().slice(0, 10),
-            motif: document.getElementById('paiementMotif').value,
+            motif: motif,
+            mois: mois,
             mode: document.getElementById('paiementMode').value,
             note: document.getElementById('paiementNote').value.trim()
         });
@@ -6373,7 +6452,8 @@ function savePaiement() {
         classeId: found.classe.id,
         montant: montant,
         date: document.getElementById('paiementDate').value || new Date().toISOString().slice(0, 10),
-        motif: document.getElementById('paiementMotif').value,
+        motif: motif,
+        mois: mois,
         mode: document.getElementById('paiementMode').value,
         note: document.getElementById('paiementNote').value.trim()
     });
@@ -6413,8 +6493,12 @@ function confirmDeletePaiement(paiementId) {
 function crmEleveScolariteHTML(e, classe, classeId, idx) {
     const esc = Security.escapeHTML;
     const frais = fraisPourNiveau(classe.niveau);
+    const annuel = totalAnnuelNiveau(classe.niveau);
     const paye = totalPaye(e.id);
-    const restant = Math.max(0, frais - paye);
+    const restant = Math.max(0, annuel - paye);
+    const inscOk = frais.inscription === 0 || totalPayeMotif(e.id, 'Inscription') >= frais.inscription;
+    const mScol = moisPayes(e.id, 'Scolarité', frais.mensualite);
+    const mRenf = moisPayes(e.id, 'Renforcement', frais.renforcement);
     const paiements = paiementsOf(e.id).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     let liste = '';
     if (paiements.length) {
@@ -6422,14 +6506,17 @@ function crmEleveScolariteHTML(e, classe, classeId, idx) {
             <div class="crm-paiement-item">
                 <div>
                     <strong>${formatMoney(p.montant)}</strong>
-                    <span class="crm-activity-time">${formatDateNaissanceFR(p.date)} · ${esc(p.motif || '')} · ${esc(p.mode || '')}</span>
+                    <span class="crm-activity-time">${formatDateNaissanceFR(p.date)} · ${esc(p.motif || '')}${p.mois ? ' (' + esc(p.mois) + ')' : ''} · ${esc(p.mode || '')}</span>
                 </div>
                 <button class="btn btn-sm btn-danger" onclick="confirmDeletePaiement('${p.id}')" title="Supprimer">&#10005;</button>
             </div>`).join('') + '</div>';
     }
     return `
         <div class="crm-section">
-            <h4>Scolarité (${formatMoney(frais)} / an)</h4>
+            <h4>Scolarité (${formatMoney(annuel)} / an)</h4>
+            ${frais.inscription > 0 ? crmInfoRow('Inscription (' + formatMoney(frais.inscription) + ')', inscOk ? '<span class="pay-badge ok">Réglée</span>' : '<span class="pay-badge none">Due</span>') : ''}
+            ${frais.mensualite > 0 ? crmInfoRow('Scolarité (' + formatMoney(frais.mensualite) + '/mois)', `<span class="pay-badge ${mScol >= MOIS_SCOLAIRES.length ? 'ok' : mScol > 0 ? 'partial' : 'none'}">${mScol}/${MOIS_SCOLAIRES.length} mois</span>`) : ''}
+            ${frais.renforcement > 0 ? crmInfoRow('Renforcement (' + formatMoney(frais.renforcement) + '/mois)', `<span class="pay-badge ${mRenf >= MOIS_SCOLAIRES.length ? 'ok' : mRenf > 0 ? 'partial' : 'none'}">${mRenf}/${MOIS_SCOLAIRES.length} mois</span>`) : ''}
             ${crmInfoRow('Payé', '<strong>' + formatMoney(paye) + '</strong>')}
             ${crmInfoRow('Restant', restant > 0 ? '<strong style="color:var(--danger,#ef4444);">' + formatMoney(restant) + '</strong>' : '<strong style="color:var(--success,#10b981);">Soldé</strong>')}
             ${liste}
@@ -6508,15 +6595,19 @@ function validerInscription(preId) {
         toast('La classe demandée n\'existe plus — modifiez l\'inscription.', 'error');
         return;
     }
+    const classePre = ec.classes.find(c => c.id === pre.classeId);
     document.getElementById('paiementPreId').value = preId;
     document.getElementById('paiementEleveId').value = '';
     document.getElementById('paiementEleveNom').textContent =
-        pre.prenom + ' ' + pre.nom + ' — inscription en ' + (ec.classes.find(c => c.id === pre.classeId).nom);
-    document.getElementById('paiementMontant').value = '';
+        pre.prenom + ' ' + pre.nom + ' — inscription en ' + classePre.nom;
+    // Montant des frais d'inscription du niveau prérempli
+    document.getElementById('paiementMontant').value = fraisPourNiveau(classePre.niveau).inscription || '';
     document.getElementById('paiementDate').value = new Date().toISOString().slice(0, 10);
     document.getElementById('paiementMotif').value = 'Inscription';
     document.getElementById('paiementMode').value = 'Espèces';
     document.getElementById('paiementNote').value = '';
+    populatePaiementMois();
+    togglePaiementMois();
     document.getElementById('paiementModal').classList.add('show');
 }
 
