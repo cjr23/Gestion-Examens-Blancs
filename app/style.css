@@ -4915,3 +4915,23 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 .carte-qr { flex-shrink: 0; padding: 3px; background: #fff; border: 1px solid #e5ddd2; border-radius: 6px; }
 .carte-qr img, .carte-qr canvas { display: block; }
 @media (max-width: 760px) { .cartes-grid { grid-template-columns: 1fr; } }
+
+/* ========== SaaS : liens créer / rejoindre une école ========== */
+.saas-links { margin-top: 18px; }
+.saas-sep { position: relative; text-align: center; margin-bottom: 12px; }
+.saas-sep::before {
+    content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+    background: var(--border-color);
+}
+.saas-sep span {
+    position: relative; background: var(--bg-card, #fff); padding: 0 12px;
+    font-size: 0.8em; color: var(--text-secondary);
+}
+.saas-links-row { display: flex; gap: 10px; }
+.saas-link-btn {
+    flex: 1; padding: 11px 12px; border-radius: 10px; cursor: pointer;
+    border: 1.5px solid var(--primary); background: transparent; color: var(--primary);
+    font-family: var(--font-body); font-size: 0.86em; font-weight: 700;
+    transition: all 0.18s ease;
+}
+.saas-link-btn:hover { background: var(--primary); color: #fff; transform: translateY(-1px); }

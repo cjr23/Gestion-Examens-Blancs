@@ -138,6 +138,224 @@ const PASSWORD_STORAGE_KEY = 'examBlanc_passwordHashes';
 let currentUserRole = null;
 let currentUserRoleId = null;
 
+// ================================================================
+// ========== MODE SaaS MULTI-ÉCOLES (Supabase) ===================
+// ================================================================
+// Si saas.config.js est présent, l'application fonctionne en SaaS :
+// comptes réels par email, chaque école a son espace isolé (RLS).
+// Sans lui, le mode local historique (config.local.js) s'applique.
+const SAAS = (window.SAAS_CONFIG && typeof supabase !== 'undefined')
+    ? supabase.createClient(window.SAAS_CONFIG.url, window.SAAS_CONFIG.anonKey)
+    : null;
+let saasEcole = null;   // { id, nom, code_invitation, ... }
+let saasRole = null;    // 'admin' (fondateur) | 'administration' (invité)
+let saasSignupMode = 'creer';
+
+// Adapte l'écran de connexion au mode SaaS (email + liens d'inscription)
+function saasApplyUI() {
+    if (!SAAS) return;
+    const roleSel = document.querySelector('.tc-role-select');
+    if (roleSel) roleSel.style.display = 'none';
+    const roleLabel = document.querySelector('.tc-role-label');
+    if (roleLabel) roleLabel.style.display = 'none';
+    const userInput = document.getElementById('loginUser');
+    if (userInput) { userInput.placeholder = 'Entrez votre email'; userInput.type = 'email'; userInput.autocomplete = 'email'; }
+    const userLab = document.querySelector('label[for="loginUser"]');
+    if (userLab) userLab.innerHTML = 'Email <span class="tc-req">*</span>';
+    const links = document.getElementById('saasLinks');
+    if (links) links.style.display = '';
+    const sub = document.querySelector('.tc-subtitle');
+    if (sub) sub.textContent = 'Connectez-vous à l\'espace de votre école';
+    const forgot = document.querySelector('.tc-forgot a');
+    if (forgot) forgot.onclick = e => { e.preventDefault(); saasMotDePasseOublie(); };
+}
+
+async function saasMotDePasseOublie() {
+    const email = document.getElementById('loginUser').value.trim();
+    if (!email) { showLoginError('Saisissez d\'abord votre email, puis cliquez sur « Mot de passe oublié ».'); return; }
+    const { error } = await SAAS.auth.resetPasswordForEmail(email);
+    if (error) showLoginError('Envoi impossible : ' + error.message);
+    else toast('Email de réinitialisation envoyé à ' + email, 'success', 6000);
+}
+
+// ---------- Inscription (créer ou rejoindre une école) ----------
+function openSaasSignup(mode) {
+    setSaasSignupMode(mode || 'creer');
+    ['saasChamp', 'saasEmail', 'saasPass', 'saasPass2'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('saasError').style.display = 'none';
+    document.getElementById('saasInfo').style.display = 'none';
+    document.getElementById('saasSignupModal').classList.add('show');
+}
+
+function setSaasSignupMode(mode) {
+    saasSignupMode = mode;
+    document.getElementById('saasTabCreer').classList.toggle('active', mode === 'creer');
+    document.getElementById('saasTabRejoindre').classList.toggle('active', mode === 'rejoindre');
+    document.getElementById('saasSignupTitle').textContent = mode === 'creer' ? 'Créer mon école' : 'Rejoindre une école';
+    document.getElementById('saasChampLabel').textContent = mode === 'creer'
+        ? 'Nom de l\'établissement' : 'Code d\'invitation de l\'école';
+    document.getElementById('saasChamp').placeholder = mode === 'creer' ? 'ex : Collège Jean XXIII' : 'ex : a1b2c3d4';
+}
+
+function saasSignupErreur(msg) {
+    const el = document.getElementById('saasError');
+    el.textContent = msg;
+    el.style.display = '';
+    document.getElementById('saasInfo').style.display = 'none';
+}
+
+async function saasSignup() {
+    const valeur = document.getElementById('saasChamp').value.trim();
+    const email = document.getElementById('saasEmail').value.trim();
+    const pass = document.getElementById('saasPass').value;
+    const pass2 = document.getElementById('saasPass2').value;
+    if (!valeur) { saasSignupErreur(saasSignupMode === 'creer' ? 'Le nom de l\'établissement est requis.' : 'Le code d\'invitation est requis.'); return; }
+    if (!email) { saasSignupErreur('L\'email est requis.'); return; }
+    if (pass.length < 8) { saasSignupErreur('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if (pass !== pass2) { saasSignupErreur('La confirmation ne correspond pas.'); return; }
+    const btn = document.getElementById('saasSubmitBtn');
+    btn.disabled = true;
+    // L'action demandée est mémorisée dans le compte : elle sera appliquée
+    // à la première connexion (création de l'école ou adhésion par code).
+    const { data, error } = await SAAS.auth.signUp({
+        email: email,
+        password: pass,
+        options: { data: { saas_action: saasSignupMode, saas_valeur: valeur } }
+    });
+    btn.disabled = false;
+    if (error) { saasSignupErreur(error.message); return; }
+    if (data.session) {
+        // Confirmation d'email désactivée : entrée directe
+        closeModal('saasSignupModal');
+        saasEnterApp();
+    } else {
+        const info = document.getElementById('saasInfo');
+        info.textContent = 'Compte créé ! Vérifiez votre boîte mail (' + email + ') pour confirmer votre adresse, puis connectez-vous.';
+        info.style.display = '';
+        document.getElementById('saasError').style.display = 'none';
+    }
+}
+
+// ---------- Connexion ----------
+async function saasLogin() {
+    const email = document.getElementById('loginUser').value.trim();
+    const pass = document.getElementById('loginPass').value;
+    const oldErr = document.querySelector('.login-error');
+    if (oldErr) oldErr.remove();
+    if (!email || !pass) { showLoginError('Email et mot de passe sont requis.'); return; }
+    const { error } = await SAAS.auth.signInWithPassword({ email: email, password: pass });
+    if (error) {
+        showLoginError(/confirm/i.test(error.message)
+            ? 'Confirmez d\'abord votre adresse email (lien envoyé par mail).'
+            : 'Email ou mot de passe incorrect.');
+        document.querySelector('.login-card').classList.add('login-shake');
+        setTimeout(() => document.querySelector('.login-card').classList.remove('login-shake'), 600);
+        return;
+    }
+    saasEnterApp();
+}
+
+// Prépare le profil, l'école et les données, puis retourne le rôle
+async function saasPostLogin() {
+    const { data: { user } } = await SAAS.auth.getUser();
+    let { data: profil } = await SAAS.from('profils').select('ecole_id, role').maybeSingle();
+    if (!profil) {
+        // Première connexion : on applique l'action choisie à l'inscription
+        const meta = (user && user.user_metadata) || {};
+        if (meta.saas_action === 'rejoindre') {
+            const r = await SAAS.rpc('rejoindre_ecole', { code: String(meta.saas_valeur || '') });
+            if (r.error) throw new Error(r.error.message);
+        } else {
+            const r = await SAAS.rpc('creer_ecole', { nom_ecole: String(meta.saas_valeur || 'Mon École') });
+            if (r.error) throw new Error(r.error.message);
+        }
+        profil = (await SAAS.from('profils').select('ecole_id, role').maybeSingle()).data;
+        if (!profil) throw new Error('Impossible de préparer votre espace école.');
+    }
+    const { data: ecole, error: eErr } = await SAAS.from('ecoles').select('*').eq('id', profil.ecole_id).single();
+    if (eErr) throw new Error(eErr.message);
+    saasEcole = ecole;
+    saasRole = profil.role;
+    // Chargement de l'état applicatif de l'école
+    const { data: don, error: dErr } = await SAAS.from('donnees').select('data').eq('ecole_id', ecole.id).maybeSingle();
+    if (dErr) throw new Error('Lecture des données impossible : ' + dErr.message);
+    if (don && don.data && Object.keys(don.data).length > 0) {
+        Object.assign(appData, don.data);
+    } else if (ecole.nom) {
+        // Nouvel espace : le nom d'établissement saisi à l'inscription est repris
+        appData.school.name = ecole.nom;
+        getEcoleData().infos.nom = ecole.nom;
+    }
+    sanitizeStudents();
+    ensureEleveIds();
+    currentUserRole = profil.role === 'admin'
+        ? { role: 'Administrateur', access: 'readonly' }
+        : { role: 'Administration', access: 'full' };
+    currentUserRoleId = profil.role;
+    // Habillage : le nom de l'école remplace le sous-titre générique
+    document.querySelectorAll('.header-brand .subtitle, .sidebar-subtitle').forEach(el => { el.textContent = ecole.nom; });
+    logActivity('Connexion SaaS : ' + (user && user.email ? user.email : ''), 'auth');
+    return profil.role;
+}
+
+// Entrée dans l'application après authentification Supabase
+async function saasEnterApp(sansAnimation) {
+    try {
+        const role = await saasPostLogin();
+        const loginPage = document.getElementById('loginPage');
+        const entrer = () => {
+            loginPage.style.display = 'none';
+            document.getElementById('appWrapper').style.display = 'block';
+            resetZoom();
+            applyRoleAccess(role);
+            populateYearSelect();
+            updateLevelTags();
+            renderDashboard();
+            const savedModule = localStorage.getItem('examBlanc_module') || 'examens';
+            if (MODULES[savedModule]) showModule(savedModule);
+        };
+        if (sansAnimation) { entrer(); return; }
+        loginPage.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        loginPage.style.opacity = '0';
+        loginPage.style.transform = 'scale(1.05)';
+        setTimeout(entrer, 500);
+    } catch (e) {
+        showLoginError(e.message || 'Connexion impossible.');
+        await SAAS.auth.signOut();
+    }
+}
+
+// Reprise de session au chargement de la page (session Supabase persistée)
+async function saasRestaurerSession() {
+    const { data: { session } } = await SAAS.auth.getSession();
+    if (session) saasEnterApp(true);
+}
+
+// ---------- Synchronisation cloud des données ----------
+let saasSyncTimer = null;
+let saasSyncErreurSignalee = false;
+
+function saasScheduleSync() {
+    if (!SAAS || !saasEcole) return;
+    clearTimeout(saasSyncTimer);
+    saasSyncTimer = setTimeout(saasPush, 1500);
+}
+
+async function saasPush() {
+    if (!SAAS || !saasEcole) return;
+    const { error } = await SAAS.from('donnees')
+        .update({ data: appData })
+        .eq('ecole_id', saasEcole.id);
+    if (error) {
+        if (!saasSyncErreurSignalee) {
+            toast('Sauvegarde cloud échouée : ' + error.message, 'error', 6000);
+            saasSyncErreurSignalee = true;
+        }
+    } else {
+        saasSyncErreurSignalee = false;
+    }
+}
+
 async function sha256Hex(str) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -183,6 +401,8 @@ function toggleLoginPassword() {
 }
 
 async function doLogin() {
+    // En mode SaaS, la connexion passe par Supabase (email + mot de passe)
+    if (SAAS) { saasLogin(); return; }
     const user = document.getElementById('loginUser').value.trim().toLowerCase();
     const pass = document.getElementById('loginPass').value;
     const roleBtn = document.querySelector('.login-role.active');
@@ -351,6 +571,10 @@ async function submitChangePassword() {
 }
 
 function logout() {
+    if (SAAS) {
+        SAAS.auth.signOut().finally(() => { location.reload(); });
+        return;
+    }
     sessionStorage.removeItem('examBlanc_session');
     currentUserRole = null;
     location.reload();
@@ -2313,7 +2537,12 @@ function confirmResetData() {
 }
 
 // ========== PERSISTENCE ==========
-function saveData() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); } catch(e) { toast('Erreur de sauvegarde !', 'error'); } }
+function saveData() {
+    // localStorage sert de cache local même en mode SaaS (résilience hors-ligne)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); } catch(e) { toast('Erreur de sauvegarde !', 'error'); }
+    // En mode SaaS, on répercute vers le cloud (débattu pour éviter les rafales)
+    saasScheduleSync();
+}
 function loadData() { try { const s = localStorage.getItem(STORAGE_KEY); if (s) { Object.assign(appData, JSON.parse(s)); return true; } } catch(e) {} return false; }
 
 // Purge les entrées d'élèves invalides (null/non-objet) et force nom/prénom en texte.
@@ -2726,6 +2955,16 @@ function populateYearSelect() {
 function init() {
     loadTheme();
     loadSidebarState();
+    if (SAAS) {
+        // Mode SaaS : les données proviennent du cloud, pas du localStorage global.
+        // On adapte l'écran de connexion et on tente de reprendre la session.
+        saasApplyUI();
+        populateYearSelect();
+        updateLevelTags();
+        syncModuleUI('examens');
+        saasRestaurerSession();
+        return;
+    }
     loadData();
     sanitizeStudents();
     ensureEleveIds();
