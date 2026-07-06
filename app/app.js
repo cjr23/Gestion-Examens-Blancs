@@ -4985,6 +4985,7 @@ function renderClasseDetail(classe) {
             <button class="btn btn-primary" onclick="showAddEleveModal('${classe.id}')">+ Inscrire un élève</button>
             <button class="btn btn-info" onclick="openClasseNotes('${classe.id}')">Notes de la classe</button>
             <button class="btn btn-warning" onclick="genererBulletinsClasse('${classe.id}')">Générer les bulletins</button>
+            <button class="btn btn-primary" onclick="genererCartesClasse('${classe.id}')">Cartes d'élèves (QR)</button>
         </div>
         <div class="alert alert-info">
             Niveau : <strong>${Security.escapeHTML(classe.niveau)}</strong>
@@ -5468,6 +5469,7 @@ function openEleveFiche(classeId, idx) {
             <button class="btn btn-sm btn-success" style="margin-top:8px;" onclick="saveEleveNotes('${classeId}', ${idx})">Enregistrer les notes</button>
         </div>
         <div class="crm-fiche-actions">
+            <button class="btn btn-primary" onclick="closeCrmDrawer(); genererCartesClasse('${classeId}', '${e.id}')">Carte QR</button>
             <button class="btn btn-info" onclick="editEleve('${classeId}', ${idx})">Modifier la fiche</button>
             <button class="btn btn-danger" onclick="confirmDeleteEleve('${classeId}', ${idx})">Supprimer</button>
         </div>`);
@@ -5972,6 +5974,87 @@ function imprimerEmploiTemps(classeId) {
     document.getElementById('printModalContent').innerHTML = html;
     document.getElementById('printModal').classList.add('show');
     logActivity(`Emploi du temps imprimé : ${classe.nom}`, 'export');
+}
+
+// ---------- Cartes d'élèves avec code QR ----------
+// Matricule séquentiel et permanent, attribué à la première génération de carte
+function ensureMatricule(eleve) {
+    const ec = getEcoleData();
+    if (!ec.prochainMatricule) ec.prochainMatricule = 1;
+    if (!eleve.matricule) {
+        const annee = String(appData.year || '').split('-')[0] || new Date().getFullYear();
+        eleve.matricule = annee + '-' + String(ec.prochainMatricule++).padStart(4, '0');
+    }
+    return eleve.matricule;
+}
+
+// La bibliothèque qrcodejs calcule mal la capacité avec les caractères
+// accentués (multi-octets UTF-8) : on encode le QR en ASCII sans accents.
+function qrAscii(str) {
+    return String(str).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E\n]/g, '');
+}
+
+// Contenu du QR : identité complète, lisible par n'importe quel scanner
+function carteQrTexte(eleve, classe) {
+    const ecole = getEcoleData().infos.nom || appData.school.name || '';
+    return qrAscii([
+        ecole.toUpperCase(),
+        'Matricule : ' + eleve.matricule,
+        'Nom : ' + (eleve.nom || '').toUpperCase(),
+        'Prenom(s) : ' + (eleve.prenom || ''),
+        'Classe : ' + classe.nom + ' (' + classe.niveau + ')',
+        'Ne(e) le : ' + (eleve.dateNaissance ? formatDateNaissanceFR(eleve.dateNaissance) : '-'),
+        'Annee scolaire : ' + appData.year
+    ].join('\n'));
+}
+
+// Génère les cartes de toute la classe (ou d'un seul élève si eleveId fourni)
+function genererCartesClasse(classeId, eleveId) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) return;
+    if (typeof QRCode === 'undefined') { toast('Bibliothèque QR non chargée. Vérifiez votre connexion Internet.', 'error', 5000); return; }
+    const eleves = eleveId ? classe.eleves.filter(e => e.id === eleveId) : classe.eleves;
+    if (eleves.length === 0) { toast('Aucun élève dans cette classe.', 'warning'); return; }
+    const ecole = ec.infos.nom || appData.school.name || '';
+    const directeur = ec.direction.directeur || '';
+    let html = '<div class="cartes-grid">';
+    eleves.forEach(e => {
+        ensureMatricule(e);
+        html += `<div class="carte-eleve">
+            <div class="carte-head">
+                <img src="logo.jpg" alt="Logo" class="carte-logo">
+                <div class="carte-titre">
+                    <div class="carte-ecole">${esc(ecole)}</div>
+                    <div class="carte-sous">CARTE D'ÉLÈVE — ${esc(appData.year)}</div>
+                </div>
+            </div>
+            <div class="carte-body">
+                <div class="carte-avatar" style="background:${crmAvatarColor((e.prenom || '') + (e.nom || ''))}">${esc(((e.prenom || ' ')[0] + (e.nom || ' ')[0]).toUpperCase())}</div>
+                <div class="carte-infos">
+                    <div class="carte-nom">${esc(e.prenom)} <b>${esc((e.nom || '').toUpperCase())}</b></div>
+                    <div class="carte-ligne">Classe : <b>${esc(classe.nom)}</b></div>
+                    <div class="carte-ligne">Né(e) le : ${formatDateNaissanceFR(e.dateNaissance)}</div>
+                    <div class="carte-ligne">Matricule : <b>${esc(e.matricule)}</b></div>
+                    <div class="carte-signature">Le Directeur${directeur ? ' — ' + esc(directeur) : ''}</div>
+                </div>
+                <div class="carte-qr" data-eleve="${e.id}"></div>
+            </div>
+        </div>`;
+    });
+    html += '</div>';
+    saveData(); // persiste les matricules attribués
+    document.getElementById('printModalTitle').textContent =
+        eleveId ? `Carte d'élève — ${eleves[0].prenom} ${eleves[0].nom}` : `Cartes d'élèves — ${classe.nom}`;
+    document.getElementById('printModalContent').innerHTML = html;
+    // Rendu des QR après injection du HTML
+    document.querySelectorAll('#printModalContent .carte-qr').forEach(box => {
+        const e = classe.eleves.find(x => x.id === box.dataset.eleve);
+        if (e) new QRCode(box, { text: carteQrTexte(e, classe), width: 74, height: 74, correctLevel: QRCode.CorrectLevel.M });
+    });
+    document.getElementById('printModal').classList.add('show');
+    logActivity(`Cartes d'élèves générées : ${eleveId ? eleves[0].prenom + ' ' + eleves[0].nom : classe.nom + ' (' + eleves.length + ' carte(s))'}`, 'export');
 }
 
 // ---------- Présences / Appel ----------

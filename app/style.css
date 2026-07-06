@@ -4883,3 +4883,35 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 [data-theme="dark"] .pres-btn.pres-p.active { color: #34d399; border-color: #34d399; }
 [data-theme="dark"] .pres-btn.pres-a.active { color: #f87171; border-color: #f87171; }
 [data-theme="dark"] .pres-btn.pres-r.active { color: #fbbf24; border-color: #fbbf24; }
+
+/* ========== CARTES D'ÉLÈVES AVEC QR ========== */
+/* Couleurs claires fixes : les cartes sont imprimées / exportées en PDF */
+.cartes-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.carte-eleve {
+    border: 2px solid #3E2415; border-radius: 12px; overflow: hidden;
+    background: #fff; color: #2a1a0e;
+    page-break-inside: avoid; break-inside: avoid;
+    font-size: 12px; line-height: 1.35;
+}
+.carte-head {
+    display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, #3E2415, #5c4a38);
+    color: #f5efe8; padding: 7px 10px;
+}
+.carte-logo { width: 30px; height: 30px; border-radius: 50%; background: #fff; object-fit: cover; flex-shrink: 0; }
+.carte-ecole { font-weight: 800; font-size: 1.02em; }
+.carte-sous { font-size: 0.78em; letter-spacing: 0.08em; color: #d4c4a8; }
+.carte-body { display: flex; align-items: center; gap: 10px; padding: 10px; }
+.carte-avatar {
+    width: 56px; height: 56px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 1.35em;
+    border: 2px solid #e5ddd2;
+}
+.carte-infos { flex: 1; min-width: 0; }
+.carte-nom { font-size: 1.1em; margin-bottom: 3px; }
+.carte-ligne { font-size: 0.92em; color: #4a3828; }
+.carte-signature { font-size: 0.78em; color: #7a6a58; margin-top: 5px; font-style: italic; }
+.carte-qr { flex-shrink: 0; padding: 3px; background: #fff; border: 1px solid #e5ddd2; border-radius: 6px; }
+.carte-qr img, .carte-qr canvas { display: block; }
+@media (max-width: 760px) { .cartes-grid { grid-template-columns: 1fr; } }
