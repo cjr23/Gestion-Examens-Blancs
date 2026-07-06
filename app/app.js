@@ -573,9 +573,9 @@ let currentPage = 'dashboard';
 // Chaque module a sa propre navigation ; les pages "Système" sont communes.
 const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
-    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'notesBulletins', 'professeurs', 'emploiTemps'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'matieres', 'presences', 'notesBulletins', 'professeurs', 'emploiTemps'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
-    compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'depenses'] }
+    compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'journalCaisse', 'depenses'] }
 };
 const SYSTEM_PAGES = ['journal', 'aichat', 'config'];
 let currentModule = 'examens';
@@ -737,12 +737,15 @@ function refreshCurrentPage() {
     if (currentPage === 'ecole') renderEcolePage();
     if (currentPage === 'classes') renderClassesPage();
     if (currentPage === 'professeurs') renderProfsTable();
+    if (currentPage === 'matieres') renderEcoleMatieres();
+    if (currentPage === 'presences') renderPresencesPage();
     if (currentPage === 'notesBulletins') renderNotesBulletinsPage();
     if (currentPage === 'emploiTemps') renderEmploiTempsPage();
     if (currentPage === 'personnel') renderPersonnelTable();
     if (currentPage === 'compta') renderComptaDashboard();
     if (currentPage === 'inscriptions') renderInscriptionsPage();
     if (currentPage === 'paiements') renderPaiementsPage();
+    if (currentPage === 'journalCaisse') renderJournalCaissePage();
     if (currentPage === 'depenses') renderDepensesPage();
     updateInscriptionsBadge();
 }
@@ -4770,6 +4773,9 @@ function getEcoleData() {
     }
     // Emplois du temps : { classeId: { 'Jour|Créneau': { matiereCode, profId } } }
     if (!appData.ecole.emplois) appData.ecole.emplois = {};
+    // Appel : { classeId: { 'AAAA-MM-JJ': { eleveId: 'A' (absent) | 'R' (retard) } } }
+    // Un élève sans entrée est considéré présent.
+    if (!appData.ecole.presences) appData.ecole.presences = {};
     return appData.ecole;
 }
 
@@ -4822,7 +4828,6 @@ function renderEcolePage() {
         <div class="stat-card orange"><div class="number">${ec.professeurs.length}</div><div class="label">Professeurs</div><div class="pct">${nbPerm} perm. · ${nbVac} vac.</div></div>`;
     renderEcoleNiveaux(ec);
     renderEcoleActivite();
-    renderEcoleMatieres();
 }
 
 function saveDirection() {
@@ -5453,6 +5458,11 @@ function openEleveFiche(classeId, idx) {
         </div>
         ${crmEleveScolariteHTML(e, classe, classeId, idx)}
         <div class="crm-section">
+            <h4>Vie scolaire</h4>
+            ${crmInfoRow('Absences (année)', '<strong>' + countPresences(classeId, e.id).abs + '</strong>')}
+            ${crmInfoRow('Retards (année)', '<strong>' + countPresences(classeId, e.id).ret + '</strong>')}
+        </div>
+        <div class="crm-section">
             <h4>Notes internes</h4>
             <textarea id="crmNotesArea" rows="5" placeholder="Observations, suivi, remarques...">${esc(e.notes || '')}</textarea>
             <button class="btn btn-sm btn-success" style="margin-top:8px;" onclick="saveEleveNotes('${classeId}', ${idx})">Enregistrer les notes</button>
@@ -5710,11 +5720,15 @@ function genererBulletinsClasse(classeId) {
             }
         });
         html += `</tbody></table>`;
+        const pres = countPresences(classe.id, e.id);
         html += `<div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:12px; padding:12px; background:#f5efe8; border-radius:8px; font-weight:700;">
             <div>Total : ${totalPts.toFixed(2)} / ${totalCoefs * 20}</div>
             <div>Moyenne : ${moy !== null ? moy.toFixed(2) : '—'} / 20</div>
             <div>Rang : ${rangs[e.id] ? rangs[e.id] + ' / ' + moyennes.length : '—'}</div>
             <div>${moy !== null ? appreciationNote(moy) : ''}</div>
+        </div>
+        <div style="margin-top:8px; padding:8px 12px; background:#faf8f5; border-radius:8px; font-size:0.9em;">
+            Assiduité : <b>${pres.abs}</b> absence(s) — <b>${pres.ret}</b> retard(s)
         </div>`;
         html += `<div style="display:flex; justify-content:space-between; margin-top:28px; padding:0 20px; font-size:0.9em;">
             <div style="text-align:center;">Le Préfet de cycle<br><br><br>${prefet ? '<b>' + esc(prefet) + '</b>' : ''}</div>
@@ -5960,6 +5974,86 @@ function imprimerEmploiTemps(classeId) {
     logActivity(`Emploi du temps imprimé : ${classe.nom}`, 'export');
 }
 
+// ---------- Présences / Appel ----------
+function renderPresencesPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('presClasseSelect');
+    const dateInp = document.getElementById('presDate');
+    const content = document.getElementById('presContent');
+    if (!dateInp.value) dateInp.value = new Date().toISOString().slice(0, 10);
+    if (ec.classes.length === 0) {
+        sel.innerHTML = '';
+        content.innerHTML = '<div class="empty-state"><p>Créez d\'abord des classes et inscrivez des élèves.</p></div>';
+        return;
+    }
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    const prev = sel.value;
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const cls = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (cls.length === 0) return '';
+        return `<optgroup label="${CYCLES[cy].label}">` +
+            cls.map(c => `<option value="${c.id}">${esc(c.nom)} (${c.eleves.length} élève(s))</option>`).join('') + '</optgroup>';
+    }).join('');
+    if (prev && tri.some(c => c.id === prev)) sel.value = prev;
+    const classe = ec.classes.find(c => c.id === sel.value) || tri[0];
+    if (classe.eleves.length === 0) {
+        content.innerHTML = '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
+        return;
+    }
+    const jour = (ec.presences[classe.id] || {})[dateInp.value] || {};
+    const nbAbs = Object.values(jour).filter(v => v === 'A').length;
+    const nbRet = Object.values(jour).filter(v => v === 'R').length;
+    let html = `<div class="alert alert-info">
+        <strong>${classe.eleves.length - nbAbs}</strong> présent(s) · <strong>${nbAbs}</strong> absent(s) · <strong>${nbRet}</strong> retard(s)
+    </div>
+    <div class="table-wrapper"><table>
+        <thead><tr><th style="text-align:left;">Élève</th><th>Appel</th><th>Total année</th></tr></thead><tbody>`;
+    classe.eleves.forEach(e => {
+        const etat = jour[e.id] || 'P';
+        const tot = countPresences(classe.id, e.id);
+        html += `<tr>
+            <td style="text-align:left;"><span class="crm-name-cell">${crmAvatar(e.prenom, e.nom)}<span>${esc(e.prenom)} <strong>${esc(e.nom)}</strong></span></span></td>
+            <td>
+                <div class="pres-toggle">
+                    <button class="pres-btn pres-p${etat === 'P' ? ' active' : ''}" onclick="setPresence('${classe.id}', '${e.id}', 'P')">Présent</button>
+                    <button class="pres-btn pres-a${etat === 'A' ? ' active' : ''}" onclick="setPresence('${classe.id}', '${e.id}', 'A')">Absent</button>
+                    <button class="pres-btn pres-r${etat === 'R' ? ' active' : ''}" onclick="setPresence('${classe.id}', '${e.id}', 'R')">Retard</button>
+                </div>
+            </td>
+            <td style="font-size:0.82em; color:var(--text-secondary);">${tot.abs} abs. · ${tot.ret} ret.</td>
+        </tr>`;
+    });
+    content.innerHTML = html + '</tbody></table></div>';
+}
+
+function setPresence(classeId, eleveId, etat) {
+    const ec = getEcoleData();
+    const date = document.getElementById('presDate').value;
+    if (!date) return;
+    if (!ec.presences[classeId]) ec.presences[classeId] = {};
+    if (!ec.presences[classeId][date]) ec.presences[classeId][date] = {};
+    if (etat === 'P') {
+        delete ec.presences[classeId][date][eleveId];
+    } else {
+        ec.presences[classeId][date][eleveId] = etat;
+    }
+    debouncedSave();
+    renderPresencesPage();
+}
+
+// Totaux d'absences et de retards d'un élève sur l'année
+function countPresences(classeId, eleveId) {
+    const jours = getEcoleData().presences[classeId] || {};
+    let abs = 0, ret = 0;
+    Object.values(jours).forEach(j => {
+        if (j[eleveId] === 'A') abs++;
+        if (j[eleveId] === 'R') ret++;
+    });
+    return { abs: abs, ret: ret };
+}
+
 // ---------- Matières des bulletins (Mon École) ----------
 function renderEcoleMatieres() {
     const ec = getEcoleData();
@@ -6155,6 +6249,8 @@ function getComptaData() {
     if (!c.fraisParNiveau) c.fraisParNiveau = {};
     if (!Array.isArray(c.paiements)) c.paiements = [];
     if (!Array.isArray(c.depenses)) c.depenses = [];
+    // Numérotation séquentielle des reçus de paiement
+    if (!c.prochainRecu) c.prochainRecu = 1;
     // Migration de l'ancien format (montant annuel unique de scolarité)
     // vers le triptyque inscription / mensualité scolarité / mensualité renforcement.
     Object.keys(c.fraisParNiveau).forEach(n => {
@@ -6365,6 +6461,9 @@ function renderPaiementsPage() {
     });
     const pctClasse = totAttendu > 0 ? Math.round(totPaye / totAttendu * 100) : 0;
     content.innerHTML = `
+        <div class="btn-group no-print">
+            <button class="btn btn-info" onclick="imprimerImpayes('${classe.id}')">Imprimer l'état des impayés</button>
+        </div>
         <div class="alert alert-info">
             Niveau <strong>${esc(classe.niveau)}</strong> — Inscription : <strong>${formatMoney(frais.inscription)}</strong> ·
             Scolarité : <strong>${formatMoney(frais.mensualite)}</strong>/mois ·
@@ -6425,6 +6524,7 @@ function savePaiement() {
         if (!res) return;
         co.paiements.push({
             id: ecoleUid('pa_'),
+            recu: co.prochainRecu++,
             eleveId: res.eleve.id,
             classeId: res.classe.id,
             montant: montant,
@@ -6448,6 +6548,7 @@ function savePaiement() {
     if (!found) { closeModal('paiementModal'); return; }
     co.paiements.push({
         id: ecoleUid('pa_'),
+        recu: co.prochainRecu++,
         eleveId: eleveId,
         classeId: found.classe.id,
         montant: montant,
@@ -6505,10 +6606,13 @@ function crmEleveScolariteHTML(e, classe, classeId, idx) {
         liste = '<div class="crm-paiements-list">' + paiements.map(p => `
             <div class="crm-paiement-item">
                 <div>
-                    <strong>${formatMoney(p.montant)}</strong>
+                    <strong>${formatMoney(p.montant)}</strong>${p.recu ? ' <span class="crm-activity-time">Reçu N° ' + String(p.recu).padStart(5, '0') + '</span>' : ''}
                     <span class="crm-activity-time">${formatDateNaissanceFR(p.date)} · ${esc(p.motif || '')}${p.mois ? ' (' + esc(p.mois) + ')' : ''} · ${esc(p.mode || '')}</span>
                 </div>
-                <button class="btn btn-sm btn-danger" onclick="confirmDeletePaiement('${p.id}')" title="Supprimer">&#10005;</button>
+                <span style="display:flex; gap:4px; flex-shrink:0;">
+                    <button class="btn btn-sm btn-outline" onclick="imprimerRecu('${p.id}')" title="Imprimer le reçu">Reçu</button>
+                    <button class="btn btn-sm btn-danger" onclick="confirmDeletePaiement('${p.id}')" title="Supprimer">&#10005;</button>
+                </span>
             </div>`).join('') + '</div>';
     }
     return `
@@ -6656,6 +6760,171 @@ function annulerInscription(preId) {
         renderInscriptionsPage();
         updateInscriptionsBadge();
     });
+}
+
+// ---------- Reçus de paiement (forme officielle) ----------
+function imprimerRecu(paiementId) {
+    const co = getComptaData();
+    const esc = Security.escapeHTML;
+    const p = co.paiements.find(x => x.id === paiementId);
+    if (!p) return;
+    const found = findEleveById(p.eleveId);
+    const nomEleve = found ? found.eleve.prenom + ' ' + found.eleve.nom : 'Élève supprimé';
+    const nomClasse = found ? found.classe.nom : '';
+    const ec = getEcoleData();
+    let html = docHeader('REÇU DE PAIEMENT', 'N° ' + String(p.recu || '—').padStart(5, '0'));
+    html += `<div style="max-width:520px; margin:0 auto; border:2px solid #3E2415; border-radius:10px; padding:20px;">
+        <table style="width:100%; border:none;"><tbody>
+            <tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Date :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${formatDateNaissanceFR(p.date)}</td></tr>
+            <tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Reçu de :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${esc(nomEleve)}${nomClasse ? ' (' + esc(nomClasse) + ')' : ''}</td></tr>
+            <tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Motif :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${esc(p.motif || '')}${p.mois ? ' — mois de ' + esc(p.mois) : ''}</td></tr>
+            <tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Mode de paiement :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${esc(p.mode || '')}</td></tr>
+            ${p.note ? `<tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Référence :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${esc(p.note)}</td></tr>` : ''}
+        </tbody></table>
+        <div style="margin-top:14px; padding:12px; background:#f5efe8; border-radius:8px; text-align:center; font-size:1.3em; font-weight:800;">
+            ${formatMoney(p.montant)} CFA
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:30px; font-size:0.9em;">
+            <div style="text-align:center;">Le payeur<br><br><br>______________</div>
+            <div style="text-align:center;">Le comptable<br><br><br>______________</div>
+        </div>
+    </div>`;
+    document.getElementById('printModalTitle').textContent = 'Reçu N° ' + String(p.recu || '—').padStart(5, '0');
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity(`Reçu imprimé : N° ${p.recu} (${formatMoney(p.montant)})`, 'export');
+}
+
+// ---------- Journal de caisse (recettes + dépenses) ----------
+// Entrées fusionnées et triées, éventuellement filtrées par mois calendaire ('AAAA-MM')
+function journalCaisseEntrees(filtreMois) {
+    const co = getComptaData();
+    const entrees = [];
+    co.paiements.forEach(p => {
+        const found = findEleveById(p.eleveId);
+        entrees.push({
+            date: p.date || '', type: 'recette', recu: p.recu || null, mode: p.mode || '',
+            montant: p.montant || 0, paiementId: p.id,
+            libelle: (found ? found.eleve.prenom + ' ' + found.eleve.nom + ' (' + found.classe.nom + ')' : 'Élève supprimé')
+                + ' — ' + (p.motif || '') + (p.mois ? ' ' + p.mois : '')
+        });
+    });
+    co.depenses.forEach(d => {
+        entrees.push({
+            date: d.date || '', type: 'depense', recu: null, mode: '',
+            montant: d.montant || 0, libelle: d.libelle + ' — ' + (d.categorie || 'Autre')
+        });
+    });
+    return entrees
+        .filter(e => filtreMois === 'tous' || (e.date || '').slice(0, 7) === filtreMois)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+let jcMoisFiltre = 'tous';
+
+function renderJournalCaissePage() {
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('jcMoisSelect');
+    // Liste des mois présents dans les mouvements
+    const moisDispo = [...new Set(journalCaisseEntrees('tous').map(e => (e.date || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+    sel.innerHTML = '<option value="tous">Toute la période</option>' + moisDispo.map(m => {
+        const [a, mm] = m.split('-');
+        const label = new Date(a, mm - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+        return `<option value="${m}"${m === jcMoisFiltre ? ' selected' : ''}>${label}</option>`;
+    }).join('');
+    if (sel.value) jcMoisFiltre = sel.value;
+    const entrees = journalCaisseEntrees(jcMoisFiltre);
+    const box = document.getElementById('jcContent');
+    if (entrees.length === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucun mouvement de caisse sur cette période.</p></div>';
+        return;
+    }
+    const recettes = entrees.filter(e => e.type === 'recette').reduce((s, e) => s + e.montant, 0);
+    const depenses = entrees.filter(e => e.type === 'depense').reduce((s, e) => s + e.montant, 0);
+    box.innerHTML = `
+        <div class="stats-grid" style="margin-bottom:14px;">
+            <div class="stat-card green"><div class="number">${formatMoney(recettes)}</div><div class="label">Recettes</div></div>
+            <div class="stat-card orange"><div class="number">${formatMoney(depenses)}</div><div class="label">Dépenses</div></div>
+            <div class="stat-card ${recettes - depenses >= 0 ? 'green' : 'red'}"><div class="number">${formatMoney(recettes - depenses)}</div><div class="label">Solde</div></div>
+        </div>
+        <div class="table-wrapper"><table>
+            <thead><tr><th>Date</th><th>N° Reçu</th><th style="text-align:left;">Libellé</th><th>Type</th><th>Mode</th><th style="text-align:right;">Montant</th><th class="no-print"></th></tr></thead>
+            <tbody>` + entrees.map(e => `<tr>
+                <td>${formatDateNaissanceFR(e.date)}</td>
+                <td>${e.recu ? String(e.recu).padStart(5, '0') : '—'}</td>
+                <td style="text-align:left;">${esc(e.libelle)}</td>
+                <td><span class="pay-badge ${e.type === 'recette' ? 'ok' : 'none'}">${e.type === 'recette' ? 'Recette' : 'Dépense'}</span></td>
+                <td>${esc(e.mode || '—')}</td>
+                <td class="money-cell" style="color:${e.type === 'recette' ? '#059669' : '#dc2626'};">${e.type === 'recette' ? '+' : '−'} ${formatMoney(e.montant)}</td>
+                <td class="no-print">${e.paiementId ? `<button class="btn btn-sm btn-outline" onclick="imprimerRecu('${e.paiementId}')" title="Imprimer le reçu">Reçu</button>` : ''}</td>
+            </tr>`).join('') + '</tbody></table></div>';
+}
+
+function imprimerJournalCaisse() {
+    const esc = Security.escapeHTML;
+    const entrees = journalCaisseEntrees(jcMoisFiltre);
+    if (entrees.length === 0) { toast('Aucun mouvement sur cette période.', 'warning'); return; }
+    const recettes = entrees.filter(e => e.type === 'recette').reduce((s, e) => s + e.montant, 0);
+    const depenses = entrees.filter(e => e.type === 'depense').reduce((s, e) => s + e.montant, 0);
+    const periode = jcMoisFiltre === 'tous' ? 'Toute la période'
+        : new Date(jcMoisFiltre.split('-')[0], jcMoisFiltre.split('-')[1] - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    let html = docHeader('JOURNAL DE CAISSE', periode + ' — ' + appData.year);
+    html += '<table><thead><tr><th>Date</th><th>N° Reçu</th><th>Libellé</th><th>Type</th><th>Montant</th></tr></thead><tbody>';
+    entrees.forEach(e => {
+        html += `<tr><td>${formatDateNaissanceFR(e.date)}</td><td>${e.recu ? String(e.recu).padStart(5, '0') : '—'}</td>
+            <td style="text-align:left;">${esc(e.libelle)}</td><td>${e.type === 'recette' ? 'Recette' : 'Dépense'}</td>
+            <td style="text-align:right;">${e.type === 'recette' ? '+' : '−'} ${formatMoney(e.montant)}</td></tr>`;
+    });
+    html += `</tbody></table>
+        <div style="margin-top:12px; padding:12px; background:#f5efe8; border-radius:8px; display:flex; justify-content:space-between; font-weight:700;">
+            <div>Recettes : ${formatMoney(recettes)}</div>
+            <div>Dépenses : ${formatMoney(depenses)}</div>
+            <div>Solde : ${formatMoney(recettes - depenses)}</div>
+        </div>`;
+    document.getElementById('printModalTitle').textContent = 'Journal de caisse — ' + periode;
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity('Journal de caisse imprimé (' + periode + ')', 'export');
+}
+
+// ---------- État des impayés d'une classe ----------
+function imprimerImpayes(classeId) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) return;
+    const frais = fraisPourNiveau(classe.niveau);
+    const annuel = totalAnnuelNiveau(classe.niveau);
+    if (annuel === 0) { toast('Définissez d\'abord les frais du niveau.', 'warning'); return; }
+    const retardataires = classe.eleves
+        .map(e => ({ e: e, paye: totalPaye(e.id) }))
+        .filter(x => x.paye < annuel);
+    if (retardataires.length === 0) { toast('Aucun impayé dans cette classe. 🎉', 'success'); return; }
+    let html = docHeader('ÉTAT DES IMPAYÉS', `${esc(classe.nom)} — Année scolaire ${appData.year}`);
+    html += `<table><thead><tr><th>N°</th><th>Prénom(s)</th><th>Nom</th><th>Inscription</th><th>Scolarité</th><th>Renforcement</th><th>Payé</th><th>Restant dû</th></tr></thead><tbody>`;
+    let totalDu = 0;
+    retardataires.forEach((x, i) => {
+        const inscOk = frais.inscription === 0 || totalPayeMotif(x.e.id, 'Inscription') >= frais.inscription;
+        const mScol = moisPayes(x.e.id, 'Scolarité', frais.mensualite);
+        const mRenf = moisPayes(x.e.id, 'Renforcement', frais.renforcement);
+        const restant = annuel - x.paye;
+        totalDu += restant;
+        html += `<tr>
+            <td>${i + 1}</td>
+            <td style="text-align:left;">${esc(x.e.prenom)}</td>
+            <td style="text-align:left;">${esc(x.e.nom)}</td>
+            <td>${frais.inscription === 0 ? '—' : inscOk ? 'Réglée' : '<b>Due</b>'}</td>
+            <td>${frais.mensualite === 0 ? '—' : mScol + '/' + MOIS_SCOLAIRES.length + ' mois'}</td>
+            <td>${frais.renforcement === 0 ? '—' : mRenf + '/' + MOIS_SCOLAIRES.length + ' mois'}</td>
+            <td style="text-align:right;">${formatMoney(x.paye)}</td>
+            <td style="text-align:right;"><b>${formatMoney(restant)}</b></td>
+        </tr>`;
+    });
+    html += `</tbody></table><p style="text-align:right; font-weight:800; margin-top:10px;">Total restant dû : ${formatMoney(totalDu)}</p>`;
+    document.getElementById('printModalTitle').textContent = 'État des impayés — ' + classe.nom;
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity(`État des impayés imprimé : ${classe.nom} (${retardataires.length} élève(s))`, 'export');
 }
 
 // ---------- Dépenses ----------

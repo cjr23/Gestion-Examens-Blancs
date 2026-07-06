@@ -4866,3 +4866,20 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
 
 /* Table des frais par niveau (inscription / scolarité / renforcement) */
 .frais-table input { width: 110px; text-align: right; padding: 6px 8px; }
+
+/* Appel / présences : boutons trois états */
+.pres-toggle { display: inline-flex; gap: 4px; }
+.pres-btn {
+    padding: 5px 12px; border-radius: 999px; cursor: pointer;
+    border: 1.5px solid var(--border-color); background: var(--bg-card);
+    color: var(--text-secondary); font-size: 0.78em; font-weight: 700;
+    transition: all 0.15s ease;
+}
+.pres-btn:hover { border-color: var(--gray-400); }
+.pres-btn.pres-p.active { background: rgba(16,185,129,0.14); border-color: #059669; color: #059669; }
+.pres-btn.pres-a.active { background: rgba(239,68,68,0.13); border-color: #dc2626; color: #dc2626; }
+.pres-btn.pres-r.active { background: rgba(245,158,11,0.16); border-color: #b45309; color: #b45309; }
+[data-theme="dark"] .pres-btn { background: #1a1008; }
+[data-theme="dark"] .pres-btn.pres-p.active { color: #34d399; border-color: #34d399; }
+[data-theme="dark"] .pres-btn.pres-a.active { color: #f87171; border-color: #f87171; }
+[data-theme="dark"] .pres-btn.pres-r.active { color: #fbbf24; border-color: #fbbf24; }

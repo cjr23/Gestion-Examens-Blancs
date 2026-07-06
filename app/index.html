@@ -213,6 +213,14 @@
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
                     <span class="nav-text">Classes</span>
                 </button>
+                <button onclick="showPage('matieres', this)" data-page="matieres" data-label="Matières &amp; Coefficients">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+                    <span class="nav-text">Matières &amp; Coef.</span>
+                </button>
+                <button onclick="showPage('presences', this)" data-page="presences" data-label="Présences / Appel">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+                    <span class="nav-text">Présences</span>
+                </button>
                 <button onclick="showPage('notesBulletins', this)" data-page="notesBulletins" data-label="Notes &amp; Bulletins">
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
                     <span class="nav-text">Notes &amp; Bulletins</span>
@@ -264,6 +272,10 @@
                 <button onclick="showPage('paiements', this)" data-page="paiements" data-label="Paiements">
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
                     <span class="nav-text">Paiements</span>
+                </button>
+                <button onclick="showPage('journalCaisse', this)" data-page="journalCaisse" data-label="Journal de caisse">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v18H2z"/><path d="M2 9h20"/><path d="M9 21V9"/></svg></span>
+                    <span class="nav-text">Journal de caisse</span>
                 </button>
                 <button onclick="showPage('depenses', this)" data-page="depenses" data-label="Dépenses">
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg></span>
@@ -597,15 +609,6 @@
             </div>
         </div>
         <div class="card">
-            <h2>Matières des Bulletins</h2>
-            <div class="alert alert-info" style="font-size:0.85em;">Ces matières et coefficients sont utilisés pour la saisie des notes de classe et la génération des bulletins.</div>
-            <div id="ecoleMatieres"></div>
-            <div class="btn-group" style="margin-top:10px;">
-                <button class="btn btn-primary" onclick="addEcoleMatiere()">+ Ajouter une matière</button>
-                <button class="btn btn-success" onclick="saveEcoleMatieres()">Sauvegarder les matières</button>
-            </div>
-        </div>
-        <div class="card">
             <h2>Informations de l'École</h2>
             <div class="form-row">
                 <div class="form-group"><label>Nom de l'établissement</label><input type="text" id="ecoleNom" style="width:300px;"></div>
@@ -655,11 +658,41 @@
         </div>
     </div>
 
+    <!-- MATIÈRES & COEFFICIENTS PAGE (École) -->
+    <div class="page" id="page-matieres">
+        <div class="card">
+            <h2>Matières &amp; Coefficients</h2>
+            <div class="alert alert-info">C'est ici que vous <strong>ajoutez, modifiez ou supprimez les matières</strong> et leurs <strong>coefficients</strong>. Elles sont utilisées pour la saisie des notes, la génération des bulletins et les emplois du temps.</div>
+            <div id="ecoleMatieres"></div>
+            <div class="btn-group" style="margin-top:10px;">
+                <button class="btn btn-primary" onclick="addEcoleMatiere()">+ Ajouter une matière</button>
+                <button class="btn btn-success" onclick="saveEcoleMatieres()">Sauvegarder les matières</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRÉSENCES / APPEL PAGE (École) -->
+    <div class="page" id="page-presences">
+        <div class="card">
+            <h2>Présences — Appel du jour</h2>
+            <div class="alert alert-info" style="font-size:0.85em;">Faites l'appel : chaque élève est <strong>Présent</strong> par défaut ; marquez les <strong>Absents</strong> et les <strong>Retards</strong>. Les totaux apparaissent sur la fiche de l'élève et sur son bulletin.</div>
+            <div class="form-row no-print">
+                <div class="form-group"><label>Classe</label>
+                    <select id="presClasseSelect" style="width:240px;" onchange="renderPresencesPage()"></select>
+                </div>
+                <div class="form-group"><label>Date</label>
+                    <input type="date" id="presDate" style="width:170px;" onchange="renderPresencesPage()">
+                </div>
+            </div>
+            <div id="presContent"></div>
+        </div>
+    </div>
+
     <!-- NOTES & BULLETINS PAGE (École) -->
     <div class="page" id="page-notesBulletins">
         <div class="card">
             <h2>Notes &amp; Bulletins</h2>
-            <div class="alert alert-info" style="font-size:0.85em;">Saisissez les notes de la classe (sur 20, sauvegarde automatique) puis générez les bulletins du trimestre. Les matières et coefficients se modifient dans <strong>Mon École</strong>.</div>
+            <div class="alert alert-info" style="font-size:0.85em;">Saisissez les notes de la classe (sur 20, sauvegarde automatique) puis générez les bulletins du trimestre. Les matières et coefficients se modifient dans <strong>Matières &amp; Coef.</strong> (menu École).</div>
             <div class="form-row no-print">
                 <div class="form-group"><label>Classe</label>
                     <select id="nbClasseSelect" style="width:240px;" onchange="renderNotesBulletinsPage()"></select>
@@ -759,6 +792,24 @@
                 </div>
             </div>
             <div id="paiementsContent"></div>
+        </div>
+    </div>
+
+    <!-- JOURNAL DE CAISSE PAGE -->
+    <div class="page" id="page-journalCaisse">
+        <div class="card">
+            <div class="crm-head-row">
+                <h2>Journal de Caisse</h2>
+                <div class="btn-group no-print" style="margin:0;">
+                    <button class="btn btn-sm btn-info" onclick="imprimerJournalCaisse()">Imprimer le journal</button>
+                </div>
+            </div>
+            <div class="form-row no-print">
+                <div class="form-group"><label>Période</label>
+                    <select id="jcMoisSelect" style="width:200px;" onchange="renderJournalCaissePage()"></select>
+                </div>
+            </div>
+            <div id="jcContent"></div>
         </div>
     </div>
 
