@@ -644,7 +644,7 @@ let currentPage = 'dashboard';
 // Chaque module a sa propre navigation ; les pages "Système" sont communes.
 const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
-    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'espaceEleve', 'alertes', 'sortants', 'matieres', 'presences', 'cahierTexte', 'notesBulletins', 'professeurs', 'emploiTemps'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'espaceEleve', 'dossiers', 'alertes', 'sortants', 'matieres', 'presences', 'cahierTexte', 'notesBulletins', 'professeurs', 'emploiTemps'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
     compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'journalCaisse', 'depenses'] }
 };
@@ -893,6 +893,7 @@ function refreshCurrentPage() {
     if (currentPage === 'alertes') renderAlertesPage();
     if (currentPage === 'sortants') renderSortantsPage();
     if (currentPage === 'cahierTexte') renderCahierTextePage();
+    if (currentPage === 'dossiers') { renderDossiersPage(); renderDossiersIncomplets(); renderPiecesRequises(); }
     if (currentPage === 'professeurs') renderProfsTable();
     if (currentPage === 'matieres') renderEcoleMatieres();
     if (currentPage === 'presences') renderPresencesPage();
@@ -2428,6 +2429,14 @@ const DERNIERE_SAUVEGARDE_KEY = 'examBlanc_derniereSauvegarde';
 const RAPPEL_SAUVEGARDE_JOURS = 7;
 
 function exportBackupJSON() {
+    // Les pièces justificatives vivent dans IndexedDB, pas dans appData : la
+    // sauvegarde JSON ne les emporte pas. Mieux vaut le dire que le découvrir
+    // au moment de restaurer.
+    const nbPieces = Object.keys((appData.ecole || {}).dossiers || {})
+        .reduce((s, id) => s + Object.keys(appData.ecole.dossiers[id]).length, 0);
+    if (nbPieces > 0) {
+        toast(`${nbPieces} pièce(s) justificative(s) ne sont pas incluses : conservez aussi les fichiers d'origine.`, 'warning', 7000);
+    }
     const json = JSON.stringify(appData, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -4980,6 +4989,12 @@ function getEcoleData() {
     if (!Array.isArray(appData.ecole.sortants)) appData.ecole.sortants = [];
     // Cahier de texte : { classeId: [ { id, date, matiereCode, profId, contenu, devoirs, dateRemise } ] }
     if (!appData.ecole.cahierTexte || typeof appData.ecole.cahierTexte !== 'object') appData.ecole.cahierTexte = {};
+    // Dossier administratif : métadonnées des pièces ; les fichiers sont dans IndexedDB.
+    // { eleveId: { codePiece: { fichierId, nomFichier, taille, mime, dateDepot } } }
+    if (!appData.ecole.dossiers || typeof appData.ecole.dossiers !== 'object') appData.ecole.dossiers = {};
+    if (!Array.isArray(appData.ecole.piecesRequises) || appData.ecole.piecesRequises.length === 0) {
+        appData.ecole.piecesRequises = JSON.parse(JSON.stringify(PIECES_DEFAUT));
+    }
     // Matières des bulletins, désormais une grille par cycle.
     // Migration : l'ancien format était un tableau plat commun à tout l'établissement.
     // On le conserve pour le moyen et le secondaire (personnalisations incluses)
@@ -6577,6 +6592,337 @@ function imprimerDossierEleve() {
     document.getElementById('printModalContent').innerHTML = html;
     document.getElementById('printModal').classList.add('show');
     logActivity(`Dossier scolaire édité : ${e.prenom} ${e.nom} (${classe.nom})`, 'export');
+}
+
+// ================================================================
+// ========== DOSSIER ADMINISTRATIF (pièces justificatives) =======
+// ================================================================
+// Les fichiers eux-mêmes vont dans IndexedDB : localStorage plafonne vers
+// 5 Mo, ce qu'une seule photo d'extrait de naissance suffit à saturer.
+// Seules les métadonnées (nom, taille, date) restent dans appData.
+
+const DOCS_DB = 'examBlancDocs';
+const DOCS_STORE = 'documents';
+const DOC_TAILLE_MAX = 5 * 1024 * 1024; // 5 Mo par pièce
+
+function ouvrirDocsDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DOCS_DB, 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(DOCS_STORE)) db.createObjectStore(DOCS_STORE, { keyPath: 'id' });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function docsTransaction(mode, action) {
+    return ouvrirDocsDB().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(DOCS_STORE, mode);
+        const req = action(tx.objectStore(DOCS_STORE));
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    }));
+}
+
+function enregistrerFichier(id, blob) { return docsTransaction('readwrite', s => s.put({ id: id, blob: blob })); }
+function lireFichier(id)             { return docsTransaction('readonly',  s => s.get(id)); }
+function effacerFichier(id)          { return docsTransaction('readwrite', s => s.delete(id)); }
+
+// Pièces demandées à l'inscription. Modifiables : chaque établissement a sa liste.
+const PIECES_DEFAUT = [
+    { code: 'EXTRAIT', nom: 'Extrait de naissance', obligatoire: true },
+    { code: 'PHOTO', nom: 'Photos d\'identité', obligatoire: true },
+    { code: 'FICHE', nom: 'Fiche d\'inscription signée', obligatoire: true },
+    { code: 'BULLETIN', nom: 'Bulletin de l\'année précédente', obligatoire: false },
+    { code: 'TRANSFERT', nom: 'Certificat de transfert', obligatoire: false },
+    { code: 'MEDICAL', nom: 'Certificat médical / carnet de vaccination', obligatoire: false },
+    { code: 'TUTEUR', nom: 'Pièce d\'identité du tuteur', obligatoire: false }
+];
+
+function dossierEleve(ec, eleveId) {
+    if (!ec.dossiers[eleveId]) ec.dossiers[eleveId] = {};
+    return ec.dossiers[eleveId];
+}
+
+// Pièces obligatoires encore absentes du dossier d'un élève
+function piecesManquantes(ec, eleveId) {
+    const d = ec.dossiers[eleveId] || {};
+    return ec.piecesRequises.filter(p => p.obligatoire && !d[p.code]);
+}
+
+function formatTaille(octets) {
+    if (octets < 1024) return octets + ' o';
+    if (octets < 1024 * 1024) return (octets / 1024).toFixed(0) + ' Ko';
+    return (octets / (1024 * 1024)).toFixed(1) + ' Mo';
+}
+
+function renderDossiersPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('dossierClasseSelect');
+    if (!sel) return;
+    if (ec.classes.length === 0) {
+        sel.innerHTML = '';
+        document.getElementById('dossierEleveSelect').innerHTML = '';
+        document.getElementById('dossierContenu').innerHTML =
+            '<div class="empty-state"><p>Aucune classe. Inscrivez des élèves pour constituer leurs dossiers.</p></div>';
+        return;
+    }
+    const prev = sel.value;
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const cls = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (cls.length === 0) return '';
+        return `<optgroup label="${esc(CYCLES[cy].label)}">` +
+            cls.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('') + '</optgroup>';
+    }).join('');
+    if (prev && tri.some(c => c.id === prev)) sel.value = prev;
+    onDossierClasseChange();
+}
+
+function onDossierClasseChange() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === document.getElementById('dossierClasseSelect').value);
+    const selEleve = document.getElementById('dossierEleveSelect');
+    if (!classe || classe.eleves.length === 0) {
+        selEleve.innerHTML = '';
+        document.getElementById('dossierContenu').innerHTML =
+            '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
+        return;
+    }
+    selEleve.innerHTML = classe.eleves.map(e => {
+        const manque = piecesManquantes(ec, e.id).length;
+        return `<option value="${e.id}">${esc(e.prenom)} ${esc(e.nom)}${manque ? ` — ${manque} pièce(s) manquante(s)` : ' — complet'}</option>`;
+    }).join('');
+    renderDossierEleve();
+}
+
+function renderDossierEleve() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('dossierContenu');
+    const classe = ec.classes.find(c => c.id === document.getElementById('dossierClasseSelect').value);
+    if (!classe) { box.innerHTML = ''; return; }
+    const eleveId = document.getElementById('dossierEleveSelect').value;
+    const e = classe.eleves.find(x => x.id === eleveId);
+    if (!e) { box.innerHTML = ''; return; }
+
+    const d = dossierEleve(ec, e.id);
+    const manquantes = piecesManquantes(ec, e.id);
+
+    let html = manquantes.length === 0
+        ? `<div class="alert alert-info">Dossier complet pour <strong>${esc(e.prenom)} ${esc(e.nom)}</strong>.</div>`
+        : `<div class="alert alert-warning">Il manque <strong>${manquantes.length}</strong> pièce(s) obligatoire(s) :
+             ${manquantes.map(p => esc(p.nom)).join(', ')}.</div>`;
+
+    html += `<div class="table-wrapper"><table>
+        <thead><tr><th style="text-align:left;">Pièce</th><th>État</th><th>Déposée le</th><th>Fichier</th><th class="no-print">Actions</th></tr></thead>
+        <tbody>` + ec.piecesRequises.map(p => {
+        const piece = d[p.code];
+        return `<tr>
+            <td style="text-align:left;">${esc(p.nom)}${p.obligatoire ? ' <span style="color:#b91c1c;">*</span>' : ''}</td>
+            <td>${piece
+                ? '<span style="color:#15803d; font-weight:700;">Fournie</span>'
+                : (p.obligatoire ? '<span style="color:#b91c1c; font-weight:700;">Manquante</span>' : '<span style="color:#7a6a58;">—</span>')}</td>
+            <td>${piece ? formatDateNaissanceFR(piece.dateDepot) : '—'}</td>
+            <td style="font-size:0.88em;">${piece ? esc(piece.nomFichier) + '<br><span style="color:#7a6a58;">' + formatTaille(piece.taille) + '</span>' : '—'}</td>
+            <td class="no-print"><div class="btn-group">
+                ${piece
+                    ? `<button class="btn btn-sm btn-info" onclick="ouvrirPiece('${e.id}', '${p.code}')">Ouvrir</button>
+                       <button class="btn btn-sm btn-danger" onclick="supprimerPiece('${e.id}', '${p.code}')">Retirer</button>`
+                    : `<button class="btn btn-sm btn-primary" onclick="declencherDepotPiece('${e.id}', '${p.code}')">Déposer</button>`}
+            </div></td>
+        </tr>`;
+    }).join('') + '</tbody></table></div>';
+
+    html += `<p style="font-size:0.85em; color:#7a6a58; margin-top:10px;">
+        <span style="color:#b91c1c;">*</span> pièce obligatoire. Formats acceptés : image ou PDF, ${formatTaille(DOC_TAILLE_MAX)} maximum par pièce.
+        La liste des pièces se modifie dans Paramètres du dossier.</p>`;
+
+    box.innerHTML = html;
+}
+
+// Le champ fichier est unique et réutilisé : on retient la cible du dépôt.
+let depotCible = null;
+
+function declencherDepotPiece(eleveId, code) {
+    depotCible = { eleveId: eleveId, code: code };
+    const input = document.getElementById('dossierFichierInput');
+    input.value = '';
+    input.click();
+}
+
+function deposerPiece(input) {
+    const file = input.files[0];
+    if (!file || !depotCible) return;
+    if (file.size > DOC_TAILLE_MAX) {
+        toast(`Fichier trop lourd (${formatTaille(file.size)}). Maximum ${formatTaille(DOC_TAILLE_MAX)} — scannez en qualité réduite.`, 'error', 6000);
+        return;
+    }
+    const ec = getEcoleData();
+    const { eleveId, code } = depotCible;
+    const fichierId = ecoleUid('doc_');
+    enregistrerFichier(fichierId, file).then(() => {
+        dossierEleve(ec, eleveId)[code] = {
+            fichierId: fichierId,
+            nomFichier: file.name,
+            taille: file.size,
+            mime: file.type || 'application/octet-stream',
+            dateDepot: new Date().toISOString().slice(0, 10)
+        };
+        saveData();
+        const piece = ec.piecesRequises.find(p => p.code === code);
+        logActivity(`Pièce déposée : ${piece ? piece.nom : code}`, 'config');
+        toast('Pièce enregistrée.', 'success');
+        onDossierClasseChange();
+    }).catch(err => {
+        toast('Impossible d\'enregistrer le fichier : ' + err.message, 'error', 6000);
+    });
+    depotCible = null;
+}
+
+function ouvrirPiece(eleveId, code) {
+    const ec = getEcoleData();
+    const piece = (ec.dossiers[eleveId] || {})[code];
+    if (!piece) return;
+    lireFichier(piece.fichierId).then(res => {
+        if (!res || !res.blob) { toast('Fichier introuvable dans le stockage local.', 'error'); return; }
+        const url = URL.createObjectURL(res.blob);
+        window.open(url, '_blank');
+        // Laisse au navigateur le temps d'ouvrir l'onglet avant de libérer l'URL
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }).catch(err => toast('Lecture impossible : ' + err.message, 'error'));
+}
+
+function supprimerPiece(eleveId, code) {
+    const ec = getEcoleData();
+    const piece = (ec.dossiers[eleveId] || {})[code];
+    if (!piece) return;
+    showConfirm('Retirer cette pièce ?', 'Le fichier sera définitivement supprimé du dossier.', () => {
+        effacerFichier(piece.fichierId).catch(() => {}).then(() => {
+            delete ec.dossiers[eleveId][code];
+            saveData();
+            toast('Pièce retirée.', 'success');
+            onDossierClasseChange();
+        });
+    });
+}
+
+// Vue transversale : qui n'a pas rendu ses pièces ?
+function renderDossiersIncomplets() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('dossiersIncompletsContenu');
+    if (!box) return;
+    const lignes = [];
+    ec.classes.forEach(classe => {
+        classe.eleves.forEach(eleve => {
+            const manque = piecesManquantes(ec, eleve.id);
+            if (manque.length > 0) lignes.push({ classe, eleve, manque });
+        });
+    });
+    const total = ec.classes.reduce((s, c) => s + c.eleves.length, 0);
+    if (total === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucun élève inscrit.</p></div>';
+        return;
+    }
+    if (lignes.length === 0) {
+        box.innerHTML = `<div class="alert alert-info">Tous les dossiers sont complets (${total} élève(s)).</div>`;
+        return;
+    }
+    lignes.sort((a, b) => b.manque.length - a.manque.length);
+    box.innerHTML = `<div class="alert alert-warning">
+            <strong>${lignes.length}</strong> dossier(s) incomplet(s) sur ${total} élève(s).
+        </div>
+        <div class="btn-group no-print" style="margin-bottom:10px;">
+            <button class="btn btn-info" onclick="imprimerDossiersIncomplets()">Imprimer la liste</button>
+        </div>
+        <div class="table-wrapper"><table>
+            <thead><tr><th style="text-align:left;">Élève</th><th>Classe</th><th style="text-align:left;">Pièces manquantes</th></tr></thead>
+            <tbody>${lignes.map(l => `<tr>
+                <td style="text-align:left; white-space:nowrap;">${esc(l.eleve.prenom)} <strong>${esc(l.eleve.nom)}</strong></td>
+                <td>${esc(l.classe.nom)}</td>
+                <td style="text-align:left;">${l.manque.map(p => esc(p.nom)).join(', ')}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>`;
+}
+
+function imprimerDossiersIncomplets() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const lignes = [];
+    ec.classes.forEach(classe => {
+        classe.eleves.forEach(eleve => {
+            const manque = piecesManquantes(ec, eleve.id);
+            if (manque.length > 0) lignes.push({ classe, eleve, manque });
+        });
+    });
+    if (lignes.length === 0) { toast('Tous les dossiers sont complets.', 'info'); return; }
+    lignes.sort((a, b) => a.classe.nom.localeCompare(b.classe.nom) || a.eleve.nom.localeCompare(b.eleve.nom, 'fr'));
+    let html = docHeader('DOSSIERS INCOMPLETS', `Année scolaire ${appData.year}`);
+    html += `<table><thead><tr><th>Classe</th><th style="text-align:left;">Élève</th><th style="text-align:left;">Pièces manquantes</th></tr></thead><tbody>` +
+        lignes.map(l => `<tr>
+            <td>${esc(l.classe.nom)}</td>
+            <td style="text-align:left;">${esc(l.eleve.prenom)} ${esc(l.eleve.nom)}</td>
+            <td style="text-align:left;">${l.manque.map(p => esc(p.nom)).join(', ')}</td>
+        </tr>`).join('') + '</tbody></table>';
+    document.getElementById('printModalTitle').textContent = 'Dossiers incomplets';
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity('Liste des dossiers incomplets imprimée', 'export');
+}
+
+// ---------- Paramétrage de la liste des pièces ----------
+function renderPiecesRequises() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('piecesRequisesContenu');
+    if (!box) return;
+    box.innerHTML = `<div class="table-wrapper"><table>
+        <thead><tr><th style="text-align:left;">Pièce</th><th>Code</th><th>Obligatoire</th><th class="no-print">Actions</th></tr></thead>
+        <tbody>` + ec.piecesRequises.map((p, i) => `<tr>
+            <td><input type="text" value="${esc(p.nom)}" data-piece="${i}" class="piece-nom" style="width:280px;"></td>
+            <td><input type="text" value="${esc(p.code)}" data-piece="${i}" class="piece-code" style="width:110px; text-transform:uppercase;"></td>
+            <td><input type="checkbox" data-piece="${i}" class="piece-obl"${p.obligatoire ? ' checked' : ''}></td>
+            <td class="no-print"><button class="btn btn-sm btn-danger" onclick="supprimerPieceRequise(${i})">Supprimer</button></td>
+        </tr>`).join('') + '</tbody></table></div>';
+}
+
+function ajouterPieceRequise() {
+    const ec = getEcoleData();
+    ec.piecesRequises.push({ code: 'PIECE' + (ec.piecesRequises.length + 1), nom: 'Nouvelle pièce', obligatoire: false });
+    renderPiecesRequises();
+}
+
+function supprimerPieceRequise(idx) {
+    const ec = getEcoleData();
+    if (ec.piecesRequises.length <= 1) { toast('Il faut au moins une pièce.', 'warning'); return; }
+    const piece = ec.piecesRequises[idx];
+    // Une pièce déjà déposée par des élèves ne disparaît pas en silence
+    const utilisee = Object.keys(ec.dossiers).filter(id => ec.dossiers[id][piece.code]).length;
+    const suite = () => {
+        ec.piecesRequises.splice(idx, 1);
+        renderPiecesRequises();
+    };
+    if (utilisee > 0) {
+        showConfirm('Supprimer cette pièce ?',
+            `${utilisee} élève(s) ont déjà déposé « ${piece.nom} ». Leurs fichiers resteront stockés mais ne seront plus affichés.`, suite);
+    } else suite();
+}
+
+function enregistrerPiecesRequises() {
+    const ec = getEcoleData();
+    document.querySelectorAll('.piece-nom').forEach(el => { ec.piecesRequises[el.dataset.piece].nom = el.value.trim() || 'Pièce'; });
+    document.querySelectorAll('.piece-code').forEach(el => { ec.piecesRequises[el.dataset.piece].code = (el.value.trim() || 'PIECE').toUpperCase(); });
+    document.querySelectorAll('.piece-obl').forEach(el => { ec.piecesRequises[el.dataset.piece].obligatoire = el.checked; });
+    saveData();
+    logActivity('Liste des pièces du dossier mise à jour', 'config');
+    toast('Liste des pièces sauvegardée.', 'success');
+    renderPiecesRequises();
 }
 
 // ---------- Cahier de texte numérique ----------

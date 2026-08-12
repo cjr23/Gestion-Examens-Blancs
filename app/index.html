@@ -250,6 +250,10 @@
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <span class="nav-text">Espace Élève</span>
                 </button>
+                <button onclick="showPage('dossiers', this)" data-page="dossiers" data-label="Dossiers élèves">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+                    <span class="nav-text">Dossiers élèves</span>
+                </button>
                 <button onclick="showPage('cahierTexte', this)" data-page="cahierTexte" data-label="Cahier de texte">
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
                     <span class="nav-text">Cahier de texte</span>
@@ -698,6 +702,36 @@
                 <button class="btn btn-info" onclick="imprimerDossierEleve()">Éditer le dossier scolaire (PDF)</button>
             </div>
             <div id="espaceEleveContenu"></div>
+        </div>
+    </div>
+
+    <!-- DOSSIERS ÉLÈVES PAGE (École) -->
+    <div class="page" id="page-dossiers">
+        <div class="card">
+            <h2>Dossiers élèves</h2>
+            <div class="alert alert-info">Les pièces fournies à l'inscription : extrait de naissance, photos, bulletin précédent… Les fichiers sont conservés <strong>dans le navigateur</strong> (IndexedDB), jamais envoyés sur Internet.</div>
+            <div class="alert alert-warning"><strong>La sauvegarde JSON n'emporte pas ces fichiers</strong> — seulement la liste des pièces déposées. Conservez les originaux (papier ou dossier scanné) tant que l'application n'a pas de serveur.</div>
+            <div class="form-row">
+                <div class="form-group"><label>Classe</label><select id="dossierClasseSelect" style="width:220px;" onchange="onDossierClasseChange()"></select></div>
+                <div class="form-group"><label>Élève</label><select id="dossierEleveSelect" style="width:320px;" onchange="renderDossierEleve()"></select></div>
+            </div>
+            <input type="file" id="dossierFichierInput" accept="image/*,application/pdf" style="display:none;" onchange="deposerPiece(this)">
+            <div id="dossierContenu"></div>
+        </div>
+
+        <div class="card">
+            <h2>Dossiers incomplets</h2>
+            <div id="dossiersIncompletsContenu"></div>
+        </div>
+
+        <div class="card">
+            <h2>Pièces demandées à l'inscription</h2>
+            <div class="alert alert-info">Chaque établissement a sa liste. Une pièce cochée « obligatoire » rend le dossier incomplet tant qu'elle manque.</div>
+            <div id="piecesRequisesContenu"></div>
+            <div class="btn-group" style="margin-top:10px;">
+                <button class="btn btn-primary" onclick="ajouterPieceRequise()">+ Ajouter une pièce</button>
+                <button class="btn btn-success" onclick="enregistrerPiecesRequises()">Sauvegarder la liste</button>
+            </div>
         </div>
     </div>
 
