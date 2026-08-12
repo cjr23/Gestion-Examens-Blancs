@@ -379,6 +379,9 @@
 <!-- LEVEL SELECTOR -->
 <div class="level-bar">
     <span>NIVEAU :</span>
+    <button class="level-btn" onclick="selectLevel('cfeeCM2')" id="lvl-cfeeCM2">
+        CM2 (CFEE) <span class="level-count" id="count-cfeeCM2">0</span>
+    </button>
     <button class="level-btn active" onclick="selectLevel('bfem3')" id="lvl-bfem3">
         3ème (BFEM) <span class="level-count" id="count-bfem3">0</span>
     </button>
@@ -623,9 +626,10 @@
         </div>
         <div class="card">
             <h2>Direction de l'Établissement</h2>
-            <div class="alert alert-info" style="font-size:0.85em;">Le directeur gère tout l'établissement ; chaque cycle est géré par un préfet.</div>
+            <div class="alert alert-info" style="font-size:0.85em;">Le directeur gère tout l'établissement ; chaque cycle a son responsable — directeur d'école à l'élémentaire, préfet au moyen et au secondaire.</div>
             <div class="form-row">
                 <div class="form-group"><label>Directeur (tout l'établissement)</label><input type="text" id="dirDirecteur" style="width:250px;"></div>
+                <div class="form-group"><label>Directeur d'école — Cycle Élémentaire (CI – CM2)</label><input type="text" id="dirDirecteurElementaire" style="width:250px;"></div>
                 <div class="form-group"><label>Préfet — Cycle Moyen (6ème – 3ème)</label><input type="text" id="dirPrefetMoyen" style="width:250px;"></div>
                 <div class="form-group"><label>Préfet — Cycle Secondaire (2nde – Tle)</label><input type="text" id="dirPrefetSecondaire" style="width:250px;"></div>
             </div>

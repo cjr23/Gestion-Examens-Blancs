@@ -130,6 +130,17 @@ const Security = (function() {
 
 Security.installInputShield();
 
+// ========== DEV : CONTOURNEMENT TEMPORAIRE DU LOGIN ==========
+// Chantier en cours : la page de connexion va être refaite. Tant que
+// DEV_SKIP_LOGIN vaut true, l'app s'ouvre directement sur le tableau de bord
+// et n'importe qui y accède sans mot de passe.
+//
+//   >>> REMETTRE À false AVANT TOUTE MISE EN LIGNE <<<
+//
+// (ce bloc est à supprimer une fois la nouvelle page terminée)
+const DEV_SKIP_LOGIN = true;
+const DEV_SKIP_LOGIN_ROLE = 'admin'; // 'admin' ou 'administration'
+
 // ========== LOGIN SYSTEM ==========
 // LOGIN_ACCOUNTS (depuis config.local.js) fournit les hashes par défaut.
 // Les hashes personnalisés par l'utilisateur sont stockés dans localStorage.
@@ -276,6 +287,23 @@ function applyRoleAccess(role) {
 }
 
 function checkSession() {
+    // Chantier : login court-circuité, voir DEV_SKIP_LOGIN en haut du fichier.
+    if (DEV_SKIP_LOGIN) {
+        const role = DEV_SKIP_LOGIN_ROLE;
+        // Repli si config.local.js est absent : LOGIN_ACCOUNTS est alors vide.
+        currentUserRole = LOGIN_ACCOUNTS[role] || {
+            role: role === 'admin' ? 'Administrateur' : 'Administration',
+            access: role === 'admin' ? 'readonly' : 'full'
+        };
+        currentUserRoleId = role;
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('appWrapper').style.display = 'block';
+        resetZoom();
+        applyRoleAccess(role);
+        showDevSkipLoginBadge();
+        return true;
+    }
+
     try {
         const session = JSON.parse(sessionStorage.getItem('examBlanc_session'));
         if (session && session.loggedIn) {
@@ -289,6 +317,24 @@ function checkSession() {
         }
     } catch(e) {}
     return false;
+}
+
+// Pastille de rappel : impossible d'oublier que le login est désactivé.
+// Styles en inline volontairement, pour que tout parte avec le bloc DEV.
+function showDevSkipLoginBadge() {
+    if (document.getElementById('devSkipLoginBadge')) return;
+    const badge = document.createElement('div');
+    badge.id = 'devSkipLoginBadge';
+    badge.textContent = 'LOGIN DÉSACTIVÉ (mode chantier)';
+    badge.title = 'DEV_SKIP_LOGIN = true dans app.js — remettre à false avant mise en ligne';
+    badge.style.cssText = [
+        'position:fixed', 'bottom:12px', 'right:12px', 'z-index:99999',
+        'background:#b91c1c', 'color:#fff', 'padding:6px 12px',
+        'border-radius:999px', 'font-size:11px', 'font-weight:700',
+        'letter-spacing:0.04em', 'box-shadow:0 2px 8px rgba(0,0,0,0.35)',
+        'pointer-events:none', 'user-select:none'
+    ].join(';');
+    document.body.appendChild(badge);
 }
 
 // ========== CHANGE PASSWORD ==========
@@ -501,6 +547,31 @@ function loadTheme() {
 // ========== DATA ==========
 const STORAGE_KEY = 'examBlanc_v2';
 const LEVELS = {
+    // CFEE blanc — fin du cycle élémentaire (CM2).
+    // Grille et seuils par défaut, modifiables dans Paramètres : à confirmer
+    // avec les textes officiels de l'IEF avant usage en délibération réelle.
+    // Le CFEE n'a pas de second tour officiel ; les pages « 2ème Tour »
+    // peuvent servir de rattrapage interne à l'établissement.
+    cfeeCM2: {
+        label: 'CFEE Blanc - CM2', shortLabel: 'CM2', examLabel: 'CFEE BLANC', className: 'CM2',
+        subjects: [
+            { name: 'Rédaction', code: 'RED', coef: 2 },
+            { name: 'Dictée', code: 'DIC', coef: 1 },
+            { name: 'Questions', code: 'QUE', coef: 1 },
+            { name: 'Calcul', code: 'CAL', coef: 1 },
+            { name: 'Problème', code: 'PB', coef: 2 },
+            { name: 'Étude du milieu', code: 'EDM', coef: 2 }
+        ],
+        subjects2: [
+            { name: 'Rédaction', code: 'RED', coef: 2 },
+            { name: 'Dictée', code: 'DIC', coef: 1 },
+            { name: 'Questions', code: 'QUE', coef: 1 },
+            { name: 'Calcul', code: 'CAL', coef: 1 },
+            { name: 'Problème', code: 'PB', coef: 2 },
+            { name: 'Étude du milieu', code: 'EDM', coef: 2 }
+        ],
+        seuilAdmis: 90, seuil2eTour: 72, seuilAdmis2: 90, coefTotal: 9, coefTotal2: 9, anoPrefix: 'E'
+    },
     bfem3: {
         label: 'BFEM Blanc - 3ème', shortLabel: '3ème', examLabel: 'EXAMEN BLANC', className: '3ème',
         subjects: [
@@ -578,32 +649,113 @@ const MODULES = {
     compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'journalCaisse', 'depenses'] }
 };
 const SYSTEM_PAGES = ['journal', 'aichat', 'config'];
-let currentModule = 'examens';
-const CLASSE_NIVEAUX = ['6ème', '5ème', '4ème', '3ème', 'Seconde', 'Première', 'Terminale'];
 
-// Deux cycles pédagogiques, chacun géré par un préfet ;
+// Modules retirés de la barre latérale le temps du chantier. Le code et les
+// pages restent intacts : vider le tableau suffit à tout réafficher.
+const HIDDEN_MODULES = ['compta'];
+
+function isModuleHidden(m) {
+    return HIDDEN_MODULES.includes(m);
+}
+
+function applyHiddenModules() {
+    HIDDEN_MODULES.forEach(m => {
+        document.querySelectorAll(`#mainNav .nav-group[data-module="${m}"]`).forEach(g => {
+            g.style.display = 'none';
+        });
+    });
+}
+
+let currentModule = 'examens';
+// Niveaux du système éducatif sénégalais, de l'élémentaire au lycée.
+const CLASSE_NIVEAUX = [
+    'CI', 'CP', 'CE1', 'CE2', 'CM1', 'CM2',
+    '6ème', '5ème', '4ème', '3ème',
+    'Seconde', 'Première', 'Terminale'
+];
+
+// Trois cycles pédagogiques, chacun avec son responsable ;
 // le directeur gère l'ensemble de l'établissement.
+// `chef` désigne la clé correspondante dans ec.direction.
 const CYCLES = {
-    moyen:      { label: 'Cycle Moyen',      sub: '6ème – 3ème',         niveaux: ['6ème', '5ème', '4ème', '3ème'] },
-    secondaire: { label: 'Cycle Secondaire', sub: 'Seconde – Terminale', niveaux: ['Seconde', 'Première', 'Terminale'] }
+    elementaire: {
+        label: 'Cycle Élémentaire', sub: 'CI – CM2', chef: 'directeurElementaire', chefLabel: 'Directeur d\'école',
+        niveaux: ['CI', 'CP', 'CE1', 'CE2', 'CM1', 'CM2']
+    },
+    moyen: {
+        label: 'Cycle Moyen', sub: '6ème – 3ème', chef: 'prefetMoyen', chefLabel: 'Préfet',
+        niveaux: ['6ème', '5ème', '4ème', '3ème']
+    },
+    secondaire: {
+        label: 'Cycle Secondaire', sub: 'Seconde – Terminale', chef: 'prefetSecondaire', chefLabel: 'Préfet',
+        niveaux: ['Seconde', 'Première', 'Terminale']
+    }
 };
 
 function cycleOfNiveau(niveau) {
-    return CYCLES.moyen.niveaux.includes(niveau) ? 'moyen' : 'secondaire';
+    const found = Object.keys(CYCLES).find(cy => CYCLES[cy].niveaux.includes(niveau));
+    return found || 'moyen';
 }
 
-// Matières des bulletins scolaires (modifiables dans Mon École)
-const ECOLE_MATIERES_DEFAUT = [
-    { nom: 'Français', code: 'FR', coef: 1 },
-    { nom: 'Maths', code: 'MATH', coef: 1 },
-    { nom: 'Anglais', code: 'ANG', coef: 1 },
-    { nom: 'Histoire et Géo', code: 'HG', coef: 1 },
-    { nom: 'S.V.T.', code: 'SVT', coef: 1 },
-    { nom: 'P.C.', code: 'PC', coef: 1 },
-    { nom: 'Économie', code: 'ECO', coef: 1 },
-    { nom: 'Informatique', code: 'INFO', coef: 1 },
-    { nom: 'Morale et Catéchèse', code: 'MOR', coef: 1 }
-];
+// Responsable d'un cycle (directeur d'école au primaire, préfet ensuite).
+function chefOfCycle(ec, cy) {
+    const cycle = CYCLES[cy];
+    if (!cycle || !ec || !ec.direction) return '';
+    return ec.direction[cycle.chef] || '';
+}
+
+// Matières des bulletins, par cycle (modifiables dans Matières & Coefficients).
+// Un bulletin de CE1 n'a rien à voir avec un bulletin de Terminale : chaque
+// cycle a donc sa propre grille. Ce sont des valeurs de départ, pas une norme.
+const ECOLE_MATIERES_PAR_CYCLE = {
+    elementaire: [
+        { nom: 'Lecture', code: 'LEC', coef: 1 },
+        { nom: 'Expression écrite', code: 'EXE', coef: 2 },
+        { nom: 'Grammaire / Orthographe', code: 'GRA', coef: 1 },
+        { nom: 'Mathématiques', code: 'MATH', coef: 2 },
+        { nom: 'Étude du milieu', code: 'EDM', coef: 1 },
+        { nom: 'Éducation civique et morale', code: 'ECM', coef: 1 },
+        { nom: 'Anglais', code: 'ANG', coef: 1 },
+        { nom: 'E.P.S.', code: 'EPS', coef: 1 },
+        { nom: 'Éducation artistique', code: 'ART', coef: 1 }
+    ],
+    moyen: [
+        { nom: 'Français', code: 'FR', coef: 1 },
+        { nom: 'Maths', code: 'MATH', coef: 1 },
+        { nom: 'Anglais', code: 'ANG', coef: 1 },
+        { nom: 'Histoire et Géo', code: 'HG', coef: 1 },
+        { nom: 'S.V.T.', code: 'SVT', coef: 1 },
+        { nom: 'P.C.', code: 'PC', coef: 1 },
+        { nom: 'Éducation civique', code: 'EC', coef: 1 },
+        { nom: 'Informatique', code: 'INFO', coef: 1 },
+        { nom: 'Morale et Catéchèse', code: 'MOR', coef: 1 },
+        { nom: 'E.P.S.', code: 'EPS', coef: 1 }
+    ],
+    secondaire: [
+        { nom: 'Lettres / Français', code: 'LM', coef: 1 },
+        { nom: 'Maths', code: 'MATH', coef: 1 },
+        { nom: 'Sciences Physiques', code: 'SP', coef: 1 },
+        { nom: 'S.V.T.', code: 'SVT', coef: 1 },
+        { nom: 'Histoire et Géo', code: 'HG', coef: 1 },
+        { nom: 'Philosophie', code: 'PHILO', coef: 1 },
+        { nom: 'Anglais', code: 'ANG', coef: 1 },
+        { nom: 'LV2', code: 'LV2', coef: 1 },
+        { nom: 'Économie', code: 'ECO', coef: 1 },
+        { nom: 'Informatique', code: 'INFO', coef: 1 },
+        { nom: 'Morale et Catéchèse', code: 'MOR', coef: 1 },
+        { nom: 'E.P.S.', code: 'EPS', coef: 1 }
+    ]
+};
+
+// Grille des matières d'un cycle, puis d'une classe donnée.
+function matieresOfCycle(ec, cy) {
+    const grilles = (ec && ec.matieres) || {};
+    return Array.isArray(grilles[cy]) ? grilles[cy] : [];
+}
+
+function matieresOfClasse(ec, classe) {
+    return matieresOfCycle(ec, cycleOfNiveau(classe && classe.niveau));
+}
 const TRIMESTRES = { t1: '1er Trimestre', t2: '2ème Trimestre', t3: '3ème Trimestre' };
 
 // Grille hebdomadaire des emplois du temps
@@ -618,7 +770,8 @@ function moduleOfPage(pageId) {
 // Ouvre le groupe accordéon du module actif (les autres se replient),
 // sans naviguer. Les en-têtes de groupe restent tous visibles.
 function syncModuleUI(m) {
-    if (!MODULES[m]) m = 'examens';
+    // Un module masqué ne doit pas non plus revenir via localStorage.
+    if (!MODULES[m] || isModuleHidden(m)) m = 'examens';
     currentModule = m;
     try { localStorage.setItem('examBlanc_module', m); } catch(e) {}
     document.querySelectorAll('#mainNav .nav-group').forEach(g => {
@@ -2730,6 +2883,7 @@ function init() {
     sanitizeStudents();
     ensureEleveIds();
     checkSession();
+    applyHiddenModules();
     populateYearSelect();
     updateLevelTags();
     renderDashboard();
@@ -4765,12 +4919,29 @@ function getEcoleData() {
     if (!Array.isArray(appData.ecole.professeurs)) appData.ecole.professeurs = [];
     // Direction : un préfet par cycle, un directeur pour l'établissement
     if (!appData.ecole.direction) appData.ecole.direction = { directeur: '', prefetMoyen: '', prefetSecondaire: '' };
+    // Ajouté avec le cycle Élémentaire : absent des sauvegardes antérieures.
+    if (typeof appData.ecole.direction.directeurElementaire !== 'string') appData.ecole.direction.directeurElementaire = '';
     // Inscriptions en attente de validation par la comptabilité
     if (!Array.isArray(appData.ecole.preinscriptions)) appData.ecole.preinscriptions = [];
-    // Matières des bulletins scolaires
-    if (!Array.isArray(appData.ecole.matieres) || appData.ecole.matieres.length === 0) {
-        appData.ecole.matieres = JSON.parse(JSON.stringify(ECOLE_MATIERES_DEFAUT));
+    // Matières des bulletins, désormais une grille par cycle.
+    // Migration : l'ancien format était un tableau plat commun à tout l'établissement.
+    // On le conserve pour le moyen et le secondaire (personnalisations incluses)
+    // et on dote l'élémentaire de sa grille par défaut.
+    if (Array.isArray(appData.ecole.matieres)) {
+        const ancienne = appData.ecole.matieres;
+        appData.ecole.matieres = {
+            elementaire: JSON.parse(JSON.stringify(ECOLE_MATIERES_PAR_CYCLE.elementaire)),
+            moyen: JSON.parse(JSON.stringify(ancienne)),
+            secondaire: JSON.parse(JSON.stringify(ancienne))
+        };
     }
+    if (!appData.ecole.matieres || typeof appData.ecole.matieres !== 'object') appData.ecole.matieres = {};
+    Object.keys(CYCLES).forEach(cy => {
+        const grille = appData.ecole.matieres[cy];
+        if (!Array.isArray(grille) || grille.length === 0) {
+            appData.ecole.matieres[cy] = JSON.parse(JSON.stringify(ECOLE_MATIERES_PAR_CYCLE[cy] || []));
+        }
+    });
     // Emplois du temps : { classeId: { 'Jour|Créneau': { matiereCode, profId } } }
     if (!appData.ecole.emplois) appData.ecole.emplois = {};
     // Appel : { classeId: { 'AAAA-MM-JJ': { eleveId: 'A' (absent) | 'R' (retard) } } }
@@ -4814,6 +4985,7 @@ function renderEcolePage() {
     document.getElementById('ecoleBP').value = ec.infos.bp || '';
     document.getElementById('ecoleDevise').value = ec.infos.devise || '';
     document.getElementById('dirDirecteur').value = ec.direction.directeur || '';
+    document.getElementById('dirDirecteurElementaire').value = ec.direction.directeurElementaire || '';
     document.getElementById('dirPrefetMoyen').value = ec.direction.prefetMoyen || '';
     document.getElementById('dirPrefetSecondaire').value = ec.direction.prefetSecondaire || '';
     const totalEleves = ec.classes.reduce((s, c) => s + c.eleves.length, 0);
@@ -4823,8 +4995,9 @@ function renderEcolePage() {
     document.getElementById('ecoleStats').innerHTML = `
         <div class="stat-card blue"><div class="number">${ec.classes.length}</div><div class="label">Classes</div></div>
         <div class="stat-card green"><div class="number">${totalEleves}</div><div class="label">Élèves</div></div>
-        <div class="stat-card blue"><div class="number">${elevesCycle('moyen')}</div><div class="label">Cycle Moyen (6e–3e)</div></div>
-        <div class="stat-card blue"><div class="number">${elevesCycle('secondaire')}</div><div class="label">Cycle Secondaire (2nde–Tle)</div></div>
+        ${Object.keys(CYCLES).map(cy =>
+            `<div class="stat-card blue"><div class="number">${elevesCycle(cy)}</div><div class="label">${CYCLES[cy].label} (${CYCLES[cy].sub})</div></div>`
+        ).join('')}
         <div class="stat-card orange"><div class="number">${ec.professeurs.length}</div><div class="label">Professeurs</div><div class="pct">${nbPerm} perm. · ${nbVac} vac.</div></div>`;
     renderEcoleNiveaux(ec);
     renderEcoleActivite();
@@ -4833,6 +5006,7 @@ function renderEcolePage() {
 function saveDirection() {
     const ec = getEcoleData();
     ec.direction.directeur = document.getElementById('dirDirecteur').value.trim();
+    ec.direction.directeurElementaire = document.getElementById('dirDirecteurElementaire').value.trim();
     ec.direction.prefetMoyen = document.getElementById('dirPrefetMoyen').value.trim();
     ec.direction.prefetSecondaire = document.getElementById('dirPrefetSecondaire').value.trim();
     saveData();
@@ -4923,7 +5097,7 @@ function renderClassesPage() {
             <a href="#" onclick="showPage('inscriptions'); return false;">Voir les inscriptions</a></div>`;
     }
     if (ec.classes.length === 0) {
-        html += '<div class="empty-state"><p>Aucune classe pour le moment. Cliquez sur « + Ajouter une classe » : elle sera automatiquement rangée dans son cycle (Moyen ou Secondaire).</p></div>';
+        html += '<div class="empty-state"><p>Aucune classe pour le moment. Cliquez sur « + Ajouter une classe » : elle sera automatiquement rangée dans son cycle (Élémentaire, Moyen ou Secondaire).</p></div>';
     } else {
         // Les classes se structurent automatiquement par cycle, chacun géré par son préfet
         Object.keys(CYCLES).forEach(cy => {
@@ -4932,12 +5106,12 @@ function renderClassesPage() {
                 .filter(c => cycleOfNiveau(c.niveau) === cy)
                 .sort((a, b) => (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
             const totalEleves = classesCycle.reduce((s, c) => s + c.eleves.length, 0);
-            const prefet = cy === 'moyen' ? ec.direction.prefetMoyen : ec.direction.prefetSecondaire;
+            const prefet = chefOfCycle(ec, cy);
             html += `<div class="cycle-section">
                 <div class="cycle-head">
                     <div>
                         <h3>${cycle.label} <span class="cycle-sub">${cycle.sub}</span></h3>
-                        <div class="cycle-prefet">Préfet : ${prefet ? '<strong>' + esc(prefet) + '</strong>' : '<em>non renseigné</em>'}</div>
+                        <div class="cycle-prefet">${esc(cycle.chefLabel)} : ${prefet ? '<strong>' + esc(prefet) + '</strong>' : '<em>non renseigné</em>'}</div>
                     </div>
                     <div class="cycle-counts">${classesCycle.length} classe(s) · ${totalEleves} élève(s)</div>
                 </div>`;
@@ -5562,7 +5736,7 @@ function moyenneEleve(classe, eleveId) {
     const ec = getEcoleData();
     const notes = getClasseNotes(classe)[eleveId] || {};
     let pts = 0, coefs = 0;
-    ec.matieres.forEach(m => {
+    matieresOfClasse(ec, classe).forEach(m => {
         const n = parseFloat(notes[m.code]);
         if (!isNaN(n)) { pts += n * (m.coef || 1); coefs += (m.coef || 1); }
     });
@@ -5609,13 +5783,14 @@ function notesTableHTML(classe) {
         return '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
     }
     const notes = getClasseNotes(classe);
+    const mats = matieresOfClasse(ec, classe);
     let html = '<div class="table-wrapper"><table><thead><tr><th style="text-align:left;">Élève</th>';
-    ec.matieres.forEach(m => { html += `<th title="${esc(m.nom)} (coef ${m.coef})">${esc(m.code)}</th>`; });
+    mats.forEach(m => { html += `<th title="${esc(m.nom)} (coef ${m.coef})">${esc(m.code)}</th>`; });
     html += '<th>Moyenne</th></tr></thead><tbody>';
     classe.eleves.forEach(e => {
         const en = notes[e.id] || {};
         html += `<tr><td style="text-align:left; white-space:nowrap;"><span class="crm-name-cell">${crmAvatar(e.prenom, e.nom)}<span>${esc(e.prenom)} <strong>${esc(e.nom)}</strong></span></span></td>`;
-        ec.matieres.forEach(m => {
+        mats.forEach(m => {
             const v = en[m.code] !== undefined ? en[m.code] : '';
             html += `<td><input type="number" class="ecole-note-input" min="0" max="20" step="0.25" value="${v}"
                 onchange="setEcoleNote('${classe.id}', '${e.id}', '${m.code}', this.value)"></td>`;
@@ -5694,7 +5869,10 @@ function genererBulletinsClasse(classeId) {
     }
     const rangs = {};
     moyennes.forEach((x, i) => { rangs[x.eleve.id] = i + 1; });
-    const prefet = cycleOfNiveau(classe.niveau) === 'moyen' ? ec.direction.prefetMoyen : ec.direction.prefetSecondaire;
+    const cycleClasse = cycleOfNiveau(classe.niveau);
+    const prefet = chefOfCycle(ec, cycleClasse);
+    // « Le Préfet » au moyen/secondaire, « Le Directeur d'école » à l'élémentaire.
+    const prefetTitre = 'Le ' + CYCLES[cycleClasse].chefLabel.toLowerCase();
     const notes = getClasseNotes(classe);
     let html = '';
     classe.eleves.forEach((e, idx) => {
@@ -5711,7 +5889,7 @@ function genererBulletinsClasse(classeId) {
         </div>`;
         html += `<table><thead><tr><th style="text-align:left;">Matière</th><th>Coef</th><th>Note /20</th><th>Note × Coef</th><th>Appréciation</th></tr></thead><tbody>`;
         let totalPts = 0, totalCoefs = 0;
-        ec.matieres.forEach(m => {
+        matieresOfClasse(ec, classe).forEach(m => {
             const n = parseFloat(en[m.code]);
             if (isNaN(n)) {
                 html += `<tr><td style="text-align:left;">${esc(m.nom)}</td><td>${m.coef}</td><td>—</td><td>—</td><td>—</td></tr>`;
@@ -5733,7 +5911,7 @@ function genererBulletinsClasse(classeId) {
             Assiduité : <b>${pres.abs}</b> absence(s) — <b>${pres.ret}</b> retard(s)
         </div>`;
         html += `<div style="display:flex; justify-content:space-between; margin-top:28px; padding:0 20px; font-size:0.9em;">
-            <div style="text-align:center;">Le Préfet de cycle<br><br><br>${prefet ? '<b>' + esc(prefet) + '</b>' : ''}</div>
+            <div style="text-align:center;">${esc(prefetTitre)}<br><br><br>${prefet ? '<b>' + esc(prefet) + '</b>' : ''}</div>
             <div style="text-align:center;">Le Directeur<br><br><br>${ec.direction.directeur ? '<b>' + esc(ec.direction.directeur) + '</b>' : ''}</div>
         </div>`;
         html += `</div>`;
@@ -5804,7 +5982,7 @@ function renderEmploiTempsPage() {
             const k = edtKey(j, cr);
             const slot = grille[k];
             if (slot) {
-                const mat = ec.matieres.find(m => m.code === slot.matiereCode);
+                const mat = matieresOfClasse(ec, classe).find(m => m.code === slot.matiereCode);
                 const prof = ec.professeurs.find(p => p.id === slot.profId);
                 const couleur = crmAvatarColor(slot.matiereCode);
                 html += `<td class="edt-cell edt-filled" onclick="openSlotModal('${classe.id}', '${j}', '${cr}')" title="Modifier ce créneau">
@@ -5884,7 +6062,7 @@ function openSlotModal(classeId, jour, creneau) {
     document.getElementById('slotClasseId').value = classeId;
     document.getElementById('slotJour').value = jour;
     document.getElementById('slotCreneau').value = creneau;
-    document.getElementById('slotMatiere').innerHTML = ec.matieres.map(m =>
+    document.getElementById('slotMatiere').innerHTML = matieresOfClasse(ec, classe).map(m =>
         `<option value="${esc(m.code)}"${slot && slot.matiereCode === m.code ? ' selected' : ''}>${esc(m.nom)}</option>`).join('');
     // Professeurs : les vacataires indisponibles et les profs déjà occupés sont désactivés
     const opts = ec.professeurs.map(p => {
@@ -5960,7 +6138,7 @@ function imprimerEmploiTemps(classeId) {
         EDT_JOURS.forEach(j => {
             const slot = grille[edtKey(j, cr)];
             if (slot) {
-                const mat = ec.matieres.find(m => m.code === slot.matiereCode);
+                const mat = matieresOfClasse(ec, classe).find(m => m.code === slot.matiereCode);
                 const prof = ec.professeurs.find(p => p.id === slot.profId);
                 html += `<td style="text-align:center;"><b>${esc(mat ? mat.nom : slot.matiereCode)}</b><br><span style="font-size:0.85em;">${prof ? esc(prof.prenom[0] + '. ' + prof.nom) : ''}</span></td>`;
             } else {
@@ -6138,13 +6316,32 @@ function countPresences(classeId, eleveId) {
 }
 
 // ---------- Matières des bulletins (Mon École) ----------
+// Chaque cycle a sa grille ; cette variable retient celle qu'on est en train d'éditer.
+let currentMatiereCycle = 'elementaire';
+
+function setMatiereCycle(cy) {
+    if (!CYCLES[cy]) return;
+    currentMatiereCycle = cy;
+    renderEcoleMatieres();
+}
+
 function renderEcoleMatieres() {
     const ec = getEcoleData();
     const esc = Security.escapeHTML;
     const box = document.getElementById('ecoleMatieres');
     if (!box) return;
-    box.innerHTML = `<table><thead><tr><th style="text-align:left;">Matière</th><th>Code</th><th>Coefficient</th><th class="no-print">Actions</th></tr></thead><tbody>` +
-        ec.matieres.map((m, i) => `<tr>
+    const mats = matieresOfCycle(ec, currentMatiereCycle);
+    const onglets = Object.keys(CYCLES).map(cy =>
+        `<button class="btn btn-sm ${cy === currentMatiereCycle ? 'btn-primary' : 'btn-outline'}"
+                 onclick="setMatiereCycle('${cy}')">${esc(CYCLES[cy].label)} <span style="opacity:0.7;">(${matieresOfCycle(ec, cy).length})</span></button>`
+    ).join(' ');
+    box.innerHTML = `<div class="btn-group no-print" style="margin-bottom:12px;">${onglets}</div>
+        <p style="font-size:0.88em; color:#5c4a38; margin-bottom:10px;">
+            Grille appliquée aux classes de <strong>${esc(CYCLES[currentMatiereCycle].sub)}</strong> —
+            saisie des notes, bulletins et emplois du temps de ce cycle.
+        </p>
+        <table><thead><tr><th style="text-align:left;">Matière</th><th>Code</th><th>Coefficient</th><th class="no-print">Actions</th></tr></thead><tbody>` +
+        mats.map((m, i) => `<tr>
             <td><input type="text" value="${esc(m.nom)}" data-mat="${i}" class="matiere-nom" style="width:200px;"></td>
             <td><input type="text" value="${esc(m.code)}" data-mat="${i}" class="matiere-code" style="width:80px; text-transform:uppercase;"></td>
             <td><input type="number" value="${m.coef}" min="1" max="10" data-mat="${i}" class="matiere-coef" style="width:70px;"></td>
@@ -6153,26 +6350,26 @@ function renderEcoleMatieres() {
 }
 
 function addEcoleMatiere() {
-    const ec = getEcoleData();
-    ec.matieres.push({ nom: 'Nouvelle matière', code: 'MAT' + (ec.matieres.length + 1), coef: 1 });
+    const mats = matieresOfCycle(getEcoleData(), currentMatiereCycle);
+    mats.push({ nom: 'Nouvelle matière', code: 'MAT' + (mats.length + 1), coef: 1 });
     renderEcoleMatieres();
 }
 
 function removeEcoleMatiere(idx) {
-    const ec = getEcoleData();
-    if (ec.matieres.length <= 1) { toast('Il faut au moins une matière.', 'warning'); return; }
-    ec.matieres.splice(idx, 1);
+    const mats = matieresOfCycle(getEcoleData(), currentMatiereCycle);
+    if (mats.length <= 1) { toast('Il faut au moins une matière dans ce cycle.', 'warning'); return; }
+    mats.splice(idx, 1);
     renderEcoleMatieres();
 }
 
 function saveEcoleMatieres() {
-    const ec = getEcoleData();
-    document.querySelectorAll('.matiere-nom').forEach(el => { ec.matieres[el.dataset.mat].nom = el.value.trim() || 'Matière'; });
-    document.querySelectorAll('.matiere-code').forEach(el => { ec.matieres[el.dataset.mat].code = (el.value.trim() || 'MAT').toUpperCase(); });
-    document.querySelectorAll('.matiere-coef').forEach(el => { ec.matieres[el.dataset.mat].coef = Math.max(1, parseInt(el.value, 10) || 1); });
+    const mats = matieresOfCycle(getEcoleData(), currentMatiereCycle);
+    document.querySelectorAll('.matiere-nom').forEach(el => { mats[el.dataset.mat].nom = el.value.trim() || 'Matière'; });
+    document.querySelectorAll('.matiere-code').forEach(el => { mats[el.dataset.mat].code = (el.value.trim() || 'MAT').toUpperCase(); });
+    document.querySelectorAll('.matiere-coef').forEach(el => { mats[el.dataset.mat].coef = Math.max(1, parseInt(el.value, 10) || 1); });
     saveData();
-    logActivity('Matières des bulletins mises à jour', 'config');
-    toast('Matières sauvegardées.', 'success');
+    logActivity(`Matières mises à jour (${CYCLES[currentMatiereCycle].label})`, 'config');
+    toast(`Matières du ${CYCLES[currentMatiereCycle].label.toLowerCase()} sauvegardées.`, 'success');
     renderEcoleMatieres();
 }
 
