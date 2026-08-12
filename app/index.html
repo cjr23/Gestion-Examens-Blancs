@@ -246,6 +246,10 @@
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
                     <span class="nav-text">Classes</span>
                 </button>
+                <button onclick="showPage('espaceEleve', this)" data-page="espaceEleve" data-label="Espace Élève">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                    <span class="nav-text">Espace Élève</span>
+                </button>
                 <button onclick="showPage('matieres', this)" data-page="matieres" data-label="Matières &amp; Coefficients">
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
                     <span class="nav-text">Matières &amp; Coef.</span>
@@ -666,6 +670,19 @@
         <div class="card">
             <h2 id="classesTitle">Gestion des Classes</h2>
             <div id="classesContent"></div>
+        </div>
+    </div>
+
+    <!-- ESPACE ÉLÈVE PAGE (École) -->
+    <div class="page" id="page-espaceEleve">
+        <div class="card">
+            <h2>Espace Élève</h2>
+            <div class="alert alert-info">Dossier scolaire complet d'un élève : identité, notes et moyennes des trois trimestres, rang, assiduité. C'est le contenu que les parents consultent sur Planète Élève.</div>
+            <div class="form-row">
+                <div class="form-group"><label>Classe</label><select id="espaceClasseSelect" style="width:220px;" onchange="onEspaceClasseChange()"></select></div>
+                <div class="form-group"><label>Élève</label><select id="espaceEleveSelect" style="width:260px;" onchange="renderEspaceEleve()"></select></div>
+            </div>
+            <div id="espaceEleveContenu"></div>
         </div>
     </div>
 
@@ -1107,6 +1124,7 @@
         <div class="form-group"><label>Classe d'inscription</label><select id="eleveClasse" style="width:100%;"></select></div>
         <div class="form-group"><label>Prénom(s)</label><input type="text" id="elevePrenom"></div>
         <div class="form-group"><label>Nom</label><input type="text" id="eleveNom"></div>
+        <div class="form-group"><label>IEN — Identifiant National de l'Élève (optionnel)</label><input type="text" id="eleveIEN" placeholder="Attribué par l'Inspection"></div>
         <div class="form-group"><label>Sexe</label><div class="sexe-toggle" id="eleveSexeToggle"><button type="button" class="btn-sexe" data-sexe="M" onclick="selectEleveSexe('M')">Garçon</button><button type="button" class="btn-sexe" data-sexe="F" onclick="selectEleveSexe('F')">Fille</button></div></div>
         <div class="form-group"><label>Date de naissance (optionnel)</label><input type="date" id="eleveDateNaissance"></div>
         <div class="form-group"><label>Téléphone du parent / tuteur (optionnel)</label><input type="text" id="eleveTelTuteur"></div>
@@ -1114,6 +1132,23 @@
         <div class="modal-actions">
             <button class="btn btn-danger" onclick="closeModal('eleveModal')">Annuler</button>
             <button class="btn btn-success" onclick="saveEleve()">Sauvegarder</button>
+        </div>
+    </div>
+</div>
+
+<!-- PASSAGE DE CLASSE MODAL -->
+<div class="modal-overlay" id="passageModal">
+    <div class="modal" style="max-width:640px;">
+        <h3>Passage de classe</h3>
+        <div class="alert alert-info" style="font-size:0.85em;">Fin d'année : chaque élève passe au niveau suivant, redouble, ou quitte l'établissement. Les redoublants restent dans leur classe ; les sortants sont archivés, jamais supprimés.</div>
+        <div class="form-group">
+            <label>Classe à faire passer</label>
+            <select id="passageClasseSelect" style="width:100%;" onchange="onPassageClasseChange()"></select>
+        </div>
+        <div id="passageContenu"></div>
+        <div class="modal-actions">
+            <button class="btn btn-danger" onclick="closeModal('passageModal')">Annuler</button>
+            <button class="btn btn-success" onclick="appliquerPassage()">Appliquer le passage</button>
         </div>
     </div>
 </div>

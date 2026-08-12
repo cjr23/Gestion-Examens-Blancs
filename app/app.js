@@ -644,7 +644,7 @@ let currentPage = 'dashboard';
 // Chaque module a sa propre navigation ; les pages "Système" sont communes.
 const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
-    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'matieres', 'presences', 'notesBulletins', 'professeurs', 'emploiTemps'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'espaceEleve', 'matieres', 'presences', 'notesBulletins', 'professeurs', 'emploiTemps'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
     compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'journalCaisse', 'depenses'] }
 };
@@ -889,6 +889,7 @@ function refreshCurrentPage() {
     if (currentPage === 'config') renderConfigPage();
     if (currentPage === 'ecole') renderEcolePage();
     if (currentPage === 'classes') renderClassesPage();
+    if (currentPage === 'espaceEleve') renderEspaceElevePage();
     if (currentPage === 'professeurs') renderProfsTable();
     if (currentPage === 'matieres') renderEcoleMatieres();
     if (currentPage === 'presences') renderPresencesPage();
@@ -4923,6 +4924,8 @@ function getEcoleData() {
     if (typeof appData.ecole.direction.directeurElementaire !== 'string') appData.ecole.direction.directeurElementaire = '';
     // Inscriptions en attente de validation par la comptabilité
     if (!Array.isArray(appData.ecole.preinscriptions)) appData.ecole.preinscriptions = [];
+    // Anciens élèves : sortis ou diplômés, conservés pour l'historique
+    if (!Array.isArray(appData.ecole.sortants)) appData.ecole.sortants = [];
     // Matières des bulletins, désormais une grille par cycle.
     // Migration : l'ancien format était un tableau plat commun à tout l'établissement.
     // On le conserve pour le moyen et le secondaire (personnalisations incluses)
@@ -5091,6 +5094,7 @@ function renderClassesPage() {
     let html = `<div class="btn-group no-print">
         <button class="btn btn-primary" onclick="showAddClasseModal()">+ Ajouter une classe</button>
         <button class="btn btn-success" onclick="showAddEleveModal()">+ Inscrire un élève</button>
+        <button class="btn btn-info" onclick="openPassageModal()">Passage de classe</button>
     </div>`;
     if (ec.preinscriptions.length > 0) {
         html += `<div class="alert alert-warning"><strong>${ec.preinscriptions.length}</strong> inscription(s) en attente de validation par la comptabilité.
@@ -5307,6 +5311,7 @@ function showAddEleveModal(classeId) {
     populateEleveClasseSelect(classeId || '');
     document.getElementById('elevePrenom').value = '';
     document.getElementById('eleveNom').value = '';
+    document.getElementById('eleveIEN').value = '';
     document.getElementById('eleveDateNaissance').value = '';
     document.getElementById('eleveTelTuteur').value = '';
     document.getElementById('eleveAdresse').value = '';
@@ -5325,6 +5330,7 @@ function editEleve(classeId, idx) {
     populateEleveClasseSelect(classeId);
     document.getElementById('elevePrenom').value = e.prenom;
     document.getElementById('eleveNom').value = e.nom;
+    document.getElementById('eleveIEN').value = e.ien || '';
     document.getElementById('eleveDateNaissance').value = e.dateNaissance || '';
     document.getElementById('eleveTelTuteur').value = e.telephone || '';
     document.getElementById('eleveAdresse').value = e.adresse || '';
@@ -5347,6 +5353,8 @@ function saveEleve() {
     const eleve = {
         prenom: prenom,
         nom: nom,
+        // IEN : identifiant attribué par l'Inspection, l'application ne fait que le stocker.
+        ien: document.getElementById('eleveIEN').value.trim(),
         sexe: selectedEleveSexe,
         dateNaissance: document.getElementById('eleveDateNaissance').value || '',
         telephone: document.getElementById('eleveTelTuteur').value.trim(),
@@ -5731,16 +5739,38 @@ function getClasseNotes(classe) {
     return classe.notes[currentTrimestre];
 }
 
-// Moyenne pondérée d'un élève (sur les matières notées uniquement)
-function moyenneEleve(classe, eleveId) {
+// Notes d'un trimestre donné, indépendamment du trimestre affiché à l'écran
+function notesTrimestre(classe, t) {
+    if (!classe.notes) classe.notes = {};
+    if (!classe.notes[t]) classe.notes[t] = {};
+    return classe.notes[t];
+}
+
+// Moyenne pondérée d'un élève sur un trimestre (matières notées uniquement)
+function moyenneEleveTrimestre(classe, eleveId, t) {
     const ec = getEcoleData();
-    const notes = getClasseNotes(classe)[eleveId] || {};
+    const notes = notesTrimestre(classe, t)[eleveId] || {};
     let pts = 0, coefs = 0;
     matieresOfClasse(ec, classe).forEach(m => {
         const n = parseFloat(notes[m.code]);
         if (!isNaN(n)) { pts += n * (m.coef || 1); coefs += (m.coef || 1); }
     });
     return coefs > 0 ? pts / coefs : null;
+}
+
+// Moyenne pondérée d'un élève (sur les matières notées uniquement)
+function moyenneEleve(classe, eleveId) {
+    return moyenneEleveTrimestre(classe, eleveId, currentTrimestre);
+}
+
+// Rang d'un élève dans sa classe pour un trimestre : { rang, sur } ou null
+function rangEleveTrimestre(classe, eleveId, t) {
+    const classes = classe.eleves
+        .map(e => ({ id: e.id, moy: moyenneEleveTrimestre(classe, e.id, t) }))
+        .filter(x => x.moy !== null)
+        .sort((a, b) => b.moy - a.moy);
+    const i = classes.findIndex(x => x.id === eleveId);
+    return i < 0 ? null : { rang: i + 1, sur: classes.length };
 }
 
 function appreciationNote(n) {
@@ -6313,6 +6343,297 @@ function countPresences(classeId, eleveId) {
         if (j[eleveId] === 'R') ret++;
     });
     return { abs: abs, ret: ret };
+}
+
+// ---------- Espace Élève : dossier scolaire consolidé ----------
+// Rassemble sur une page ce qu'un parent consulte sur Planète Élève :
+// identité, notes et moyennes des trois trimestres, rang, assiduité.
+
+function renderEspaceElevePage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('espaceClasseSelect');
+    if (!sel) return;
+    if (ec.classes.length === 0) {
+        sel.innerHTML = '';
+        document.getElementById('espaceEleveSelect').innerHTML = '';
+        document.getElementById('espaceEleveContenu').innerHTML =
+            '<div class="empty-state"><p>Aucune classe. Créez une classe et inscrivez des élèves pour consulter leur dossier.</p></div>';
+        return;
+    }
+    const prev = sel.value;
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const cls = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (cls.length === 0) return '';
+        return `<optgroup label="${esc(CYCLES[cy].label)}">` +
+            cls.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('') + '</optgroup>';
+    }).join('');
+    if (prev && tri.some(c => c.id === prev)) sel.value = prev;
+    onEspaceClasseChange();
+}
+
+function onEspaceClasseChange() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === document.getElementById('espaceClasseSelect').value);
+    const selEleve = document.getElementById('espaceEleveSelect');
+    if (!classe || classe.eleves.length === 0) {
+        selEleve.innerHTML = '';
+        document.getElementById('espaceEleveContenu').innerHTML =
+            '<div class="empty-state"><p>Aucun élève dans cette classe.</p></div>';
+        return;
+    }
+    selEleve.innerHTML = classe.eleves.map(e =>
+        `<option value="${e.id}">${esc(e.prenom)} ${esc(e.nom)}</option>`).join('');
+    renderEspaceEleve();
+}
+
+function renderEspaceEleve() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('espaceEleveContenu');
+    const classe = ec.classes.find(c => c.id === document.getElementById('espaceClasseSelect').value);
+    if (!classe) { box.innerHTML = ''; return; }
+    const eleveId = document.getElementById('espaceEleveSelect').value;
+    const e = classe.eleves.find(x => x.id === eleveId);
+    if (!e) { box.innerHTML = ''; return; }
+
+    const mats = matieresOfClasse(ec, classe);
+    const pres = countPresences(classe.id, e.id);
+
+    // Identité
+    let html = `<div class="card" style="margin-top:14px;">
+        <h3 style="margin-bottom:10px;">${esc(e.prenom)} ${esc(e.nom)}</h3>
+        <div class="crm-fiche-grid">
+            <div><b>IEN :</b> ${e.ien ? esc(e.ien) : '<em>non renseigné</em>'}</div>
+            <div><b>Classe :</b> ${esc(classe.nom)} (${esc(classe.niveau)})</div>
+            <div><b>Sexe :</b> ${e.sexe === 'F' ? 'Fille' : 'Garçon'}</div>
+            <div><b>Né(e) le :</b> ${formatDateNaissanceFR(e.dateNaissance)}</div>
+            <div><b>Tuteur :</b> ${e.telephone ? esc(e.telephone) : '<em>non renseigné</em>'}</div>
+            <div><b>Cycle :</b> ${esc(CYCLES[cycleOfNiveau(classe.niveau)].label)}</div>
+        </div>
+    </div>`;
+
+    // Assiduité — l'équivalent des rubriques Absences et Retards de Planète Élève
+    html += `<div class="stats-grid" style="margin-top:14px;">
+        <div class="stat-card ${pres.abs > 0 ? 'orange' : 'green'}"><div class="number">${pres.abs}</div><div class="label">Absences</div></div>
+        <div class="stat-card ${pres.ret > 0 ? 'orange' : 'green'}"><div class="number">${pres.ret}</div><div class="label">Retards</div></div>
+    </div>`;
+
+    // Notes par trimestre
+    const trimestres = Object.keys(TRIMESTRES);
+    const moyennes = [];
+    trimestres.forEach(t => {
+        const notes = notesTrimestre(classe, t)[e.id] || {};
+        const moy = moyenneEleveTrimestre(classe, e.id, t);
+        const rg = rangEleveTrimestre(classe, e.id, t);
+        moyennes.push(moy);
+        const lignes = mats.map(m => {
+            const n = parseFloat(notes[m.code]);
+            return `<tr>
+                <td style="text-align:left;">${esc(m.nom)}</td>
+                <td>${m.coef}</td>
+                <td>${isNaN(n) ? '—' : n.toFixed(2)}</td>
+                <td>${isNaN(n) ? '—' : appreciationNote(n)}</td>
+            </tr>`;
+        }).join('');
+        html += `<div class="card" style="margin-top:14px;">
+            <h3 style="margin-bottom:8px;">${esc(TRIMESTRES[t])}</h3>
+            ${moy === null
+                ? '<div class="empty-state"><p>Aucune note saisie pour ce trimestre.</p></div>'
+                : `<p style="font-size:0.95em;">Moyenne : <strong>${moy.toFixed(2)}/20</strong>
+                     — ${esc(appreciationNote(moy))}
+                     ${rg ? ` — rang <strong>${rg.rang}</strong> sur ${rg.sur}` : ''}</p>`}
+            <div class="table-wrapper"><table>
+                <thead><tr><th style="text-align:left;">Matière</th><th>Coef</th><th>Note /20</th><th>Appréciation</th></tr></thead>
+                <tbody>${lignes}</tbody>
+            </table></div>
+        </div>`;
+    });
+
+    // Moyenne annuelle : sur les seuls trimestres notés
+    const notees = moyennes.filter(m => m !== null);
+    if (notees.length > 0) {
+        const annuelle = notees.reduce((s, m) => s + m, 0) / notees.length;
+        html += `<div class="alert ${annuelle >= 10 ? 'alert-info' : 'alert-warning'}" style="margin-top:14px;">
+            <strong>Moyenne annuelle : ${annuelle.toFixed(2)}/20</strong>
+            — ${esc(appreciationNote(annuelle))}
+            <span style="opacity:0.8;">(sur ${notees.length} trimestre(s) noté(s))</span>
+        </div>`;
+    }
+
+    box.innerHTML = html;
+}
+
+// ---------- Passage de classe (fin d'année) ----------
+// Fait monter une promotion d'un niveau au suivant. Chaque élève reçoit une
+// décision : il passe, il redouble (il reste sur place), ou il sort de
+// l'établissement. Rien n'est supprimé : les sortants sont archivés.
+
+// Décisions par élève pendant que le formulaire est ouvert : { eleveId: 'passe'|'redouble'|'sortie' }
+let passageDecisions = {};
+let passageClasseId = null;
+
+function niveauSuivant(niveau) {
+    const i = CLASSE_NIVEAUX.indexOf(niveau);
+    if (i < 0 || i >= CLASSE_NIVEAUX.length - 1) return null; // Terminale : fin de cursus
+    return CLASSE_NIVEAUX[i + 1];
+}
+
+function openPassageModal() {
+    const ec = getEcoleData();
+    if (ec.classes.length === 0) { toast('Aucune classe à faire passer.', 'warning'); return; }
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('passageClasseSelect');
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    sel.innerHTML = tri.map(c =>
+        `<option value="${c.id}">${esc(c.nom)} (${esc(c.niveau)}) — ${c.eleves.length} élève(s)</option>`).join('');
+    passageClasseId = tri[0].id;
+    sel.value = passageClasseId;
+    renderPassageListe();
+    document.getElementById('passageModal').classList.add('show');
+}
+
+function onPassageClasseChange() {
+    passageClasseId = document.getElementById('passageClasseSelect').value;
+    passageDecisions = {};
+    renderPassageListe();
+}
+
+function renderPassageListe() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === passageClasseId);
+    const box = document.getElementById('passageContenu');
+    if (!classe) { box.innerHTML = ''; return; }
+
+    const suivant = niveauSuivant(classe.niveau);
+    const cible = suivant
+        ? ec.classes.filter(c => c.niveau === suivant).sort((a, b) => a.nom.localeCompare(b.nom))
+        : [];
+
+    let entete;
+    if (!suivant) {
+        entete = `<div class="alert alert-warning">Classe de <strong>${esc(classe.niveau)}</strong> : fin du cursus.
+            Les élèves marqués « passe » seront archivés comme sortants diplômés.</div>`;
+    } else {
+        const options = cible.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')
+            + `<option value="__nouvelle__">— Créer une nouvelle classe de ${esc(suivant)} —</option>`;
+        entete = `<div class="form-group">
+            <label>Classe de destination (${esc(suivant)})</label>
+            <select id="passageCible" style="width:100%;">${options}</select>
+        </div>`;
+        if (cible.length === 0) {
+            entete += `<div class="alert alert-info">Aucune classe de ${esc(suivant)} n'existe encore : elle sera créée automatiquement.</div>`;
+        }
+    }
+
+    if (classe.eleves.length === 0) {
+        box.innerHTML = entete + '<div class="empty-state"><p>Cette classe n\'a aucun élève.</p></div>';
+        return;
+    }
+
+    const lignes = classe.eleves.map(e => {
+        const d = passageDecisions[e.id] || 'passe';
+        const bouton = (val, label, cls) =>
+            `<button type="button" class="btn btn-sm ${d === val ? cls : 'btn-outline'}"
+                     onclick="setPassageDecision('${e.id}', '${val}')">${label}</button>`;
+        return `<tr>
+            <td style="text-align:left; white-space:nowrap;">${esc(e.prenom)} <strong>${esc(e.nom)}</strong></td>
+            <td class="no-print"><div class="btn-group">
+                ${bouton('passe', 'Passe', 'btn-success')}
+                ${bouton('redouble', 'Redouble', 'btn-primary')}
+                ${bouton('sortie', 'Sortie', 'btn-danger')}
+            </div></td>
+        </tr>`;
+    }).join('');
+
+    const n = v => classe.eleves.filter(e => (passageDecisions[e.id] || 'passe') === v).length;
+    box.innerHTML = entete
+        + `<p style="font-size:0.9em; color:#5c4a38;">
+             <strong>${n('passe')}</strong> passe(nt) · <strong>${n('redouble')}</strong> redouble(nt) · <strong>${n('sortie')}</strong> sortie(s)
+           </p>`
+        + `<div class="table-wrapper"><table><thead><tr><th style="text-align:left;">Élève</th><th>Décision</th></tr></thead><tbody>${lignes}</tbody></table></div>`;
+}
+
+function setPassageDecision(eleveId, decision) {
+    passageDecisions[eleveId] = decision;
+    // Conserve la classe de destination déjà choisie pendant le re-rendu
+    const cibleEl = document.getElementById('passageCible');
+    const cible = cibleEl ? cibleEl.value : null;
+    renderPassageListe();
+    const nouveauCible = document.getElementById('passageCible');
+    if (nouveauCible && cible) nouveauCible.value = cible;
+}
+
+function appliquerPassage() {
+    const ec = getEcoleData();
+    const classe = ec.classes.find(c => c.id === passageClasseId);
+    if (!classe) return;
+    const suivant = niveauSuivant(classe.niveau);
+
+    const passants = classe.eleves.filter(e => (passageDecisions[e.id] || 'passe') === 'passe');
+    const sortants = classe.eleves.filter(e => passageDecisions[e.id] === 'sortie');
+    if (passants.length === 0 && sortants.length === 0) {
+        toast('Aucun élève ne change de classe : tout le monde redouble.', 'info');
+        return;
+    }
+
+    // Classe de destination : existante ou créée à la volée
+    let cible = null;
+    if (suivant && passants.length > 0) {
+        const choix = (document.getElementById('passageCible') || {}).value;
+        if (!choix || choix === '__nouvelle__') {
+            cible = { id: ecoleUid('cl_'), nom: suivant + ' A', niveau: suivant, profId: '', eleves: [] };
+            // Évite une collision de nom si « 6ème A » existe déjà
+            let n = 1;
+            while (ec.classes.some(c => c.nom.toLowerCase() === cible.nom.toLowerCase())) {
+                cible.nom = suivant + ' ' + String.fromCharCode(65 + n); n++;
+            }
+            ec.classes.push(cible);
+        } else {
+            cible = ec.classes.find(c => c.id === choix);
+        }
+        if (!cible) { toast('Classe de destination introuvable.', 'error'); return; }
+    }
+
+    // Les sortants sont archivés, jamais effacés
+    if (!Array.isArray(ec.sortants)) ec.sortants = [];
+    const diplome = !suivant;
+    [...sortants, ...(diplome ? passants : [])].forEach(e => {
+        ec.sortants.push(Object.assign({}, e, {
+            anneeSortie: appData.year,
+            classeSortie: classe.nom,
+            motif: diplome && passants.includes(e) ? 'Fin de cursus' : 'Sortie'
+        }));
+    });
+
+    // Retire de la classe d'origine ceux qui la quittent : les redoublants restent.
+    const partants = new Set([...sortants, ...passants].map(e => e.id));
+    classe.eleves = classe.eleves.filter(e => !partants.has(e.id));
+
+    // Installe les passants dans la classe de destination
+    if (cible) {
+        passants.forEach(e => {
+            cible.eleves.push(e);
+            // Les paiements suivent l'élève dans sa nouvelle classe
+            getComptaData().paiements.forEach(p => { if (p.eleveId === e.id) p.classeId = cible.id; });
+        });
+        cible.eleves.sort((a, b) => (a.nom + ' ' + a.prenom).localeCompare(b.nom + ' ' + b.prenom, 'fr'));
+    }
+
+    saveData();
+    closeModal('passageModal');
+    passageDecisions = {};
+    const resume = cible
+        ? `${passants.length} élève(s) passé(s) en ${cible.nom}`
+        : `${passants.length} élève(s) diplômé(s)`;
+    logActivity(`Passage de classe depuis ${classe.nom} : ${resume}, ${sortants.length} sortie(s)`, 'config');
+    toast(`${resume}${sortants.length ? ', ' + sortants.length + ' sortie(s)' : ''}.`, 'success', 5000);
+    renderClassesPage();
 }
 
 // ---------- Matières des bulletins (Mon École) ----------
