@@ -250,6 +250,14 @@
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <span class="nav-text">Espace Élève</span>
                 </button>
+                <button onclick="showPage('alertes', this)" data-page="alertes" data-label="Alertes &amp; Suivi">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                    <span class="nav-text">Alertes &amp; Suivi</span>
+                </button>
+                <button onclick="showPage('sortants', this)" data-page="sortants" data-label="Anciens élèves">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></span>
+                    <span class="nav-text">Anciens élèves</span>
+                </button>
                 <button onclick="showPage('matieres', this)" data-page="matieres" data-label="Matières &amp; Coefficients">
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
                     <span class="nav-text">Matières &amp; Coef.</span>
@@ -682,7 +690,28 @@
                 <div class="form-group"><label>Classe</label><select id="espaceClasseSelect" style="width:220px;" onchange="onEspaceClasseChange()"></select></div>
                 <div class="form-group"><label>Élève</label><select id="espaceEleveSelect" style="width:260px;" onchange="renderEspaceEleve()"></select></div>
             </div>
+            <div class="btn-group no-print" style="margin-bottom:10px;">
+                <button class="btn btn-info" onclick="imprimerDossierEleve()">Éditer le dossier scolaire (PDF)</button>
+            </div>
             <div id="espaceEleveContenu"></div>
+        </div>
+    </div>
+
+    <!-- ALERTES & SUIVI PAGE (École) -->
+    <div class="page" id="page-alertes">
+        <div class="card">
+            <h2>Alertes &amp; Suivi</h2>
+            <div class="alert alert-info">Repère les élèves en difficulté <strong>avant</strong> le conseil de classe : moyenne insuffisante, absences répétées, ou chute brutale entre deux trimestres. Un portail de consultation se contente d'afficher les notes ; ici l'école est prévenue.</div>
+            <div id="alertesContenu"></div>
+        </div>
+    </div>
+
+    <!-- ANCIENS ÉLÈVES PAGE (École) -->
+    <div class="page" id="page-sortants">
+        <div class="card">
+            <h2>Anciens élèves</h2>
+            <div class="alert alert-info">Registre des élèves sortis de l'établissement, alimenté par les passages de classe. Aucun dossier n'est jamais supprimé.</div>
+            <div id="sortantsContenu"></div>
         </div>
     </div>
 

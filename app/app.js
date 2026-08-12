@@ -644,7 +644,7 @@ let currentPage = 'dashboard';
 // Chaque module a sa propre navigation ; les pages "Système" sont communes.
 const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
-    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'espaceEleve', 'matieres', 'presences', 'notesBulletins', 'professeurs', 'emploiTemps'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'espaceEleve', 'alertes', 'sortants', 'matieres', 'presences', 'notesBulletins', 'professeurs', 'emploiTemps'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
     compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'journalCaisse', 'depenses'] }
 };
@@ -890,6 +890,8 @@ function refreshCurrentPage() {
     if (currentPage === 'ecole') renderEcolePage();
     if (currentPage === 'classes') renderClassesPage();
     if (currentPage === 'espaceEleve') renderEspaceElevePage();
+    if (currentPage === 'alertes') renderAlertesPage();
+    if (currentPage === 'sortants') renderSortantsPage();
     if (currentPage === 'professeurs') renderProfsTable();
     if (currentPage === 'matieres') renderEcoleMatieres();
     if (currentPage === 'presences') renderPresencesPage();
@@ -6465,6 +6467,181 @@ function renderEspaceEleve() {
     }
 
     box.innerHTML = html;
+}
+
+// Dossier scolaire imprimable / exportable en PDF.
+// Planète Élève permet de télécharger le bulletin ; ici c'est l'année entière.
+function imprimerDossierEleve() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === document.getElementById('espaceClasseSelect').value);
+    if (!classe) { toast('Choisissez une classe.', 'warning'); return; }
+    const e = classe.eleves.find(x => x.id === document.getElementById('espaceEleveSelect').value);
+    if (!e) { toast('Choisissez un élève.', 'warning'); return; }
+
+    const mats = matieresOfClasse(ec, classe);
+    const pres = countPresences(classe.id, e.id);
+    let html = docHeader('DOSSIER SCOLAIRE', `${esc(e.prenom)} ${esc(e.nom)} — ${esc(classe.nom)} (${esc(classe.niveau)})`);
+    html += `<table style="margin-bottom:12px;"><tbody>
+        <tr><td style="text-align:left;"><b>IEN</b></td><td style="text-align:left;">${e.ien ? esc(e.ien) : '—'}</td>
+            <td style="text-align:left;"><b>Né(e) le</b></td><td style="text-align:left;">${formatDateNaissanceFR(e.dateNaissance)}</td></tr>
+        <tr><td style="text-align:left;"><b>Sexe</b></td><td style="text-align:left;">${e.sexe === 'F' ? 'Fille' : 'Garçon'}</td>
+            <td style="text-align:left;"><b>Assiduité</b></td><td style="text-align:left;">${pres.abs} absence(s), ${pres.ret} retard(s)</td></tr>
+    </tbody></table>`;
+
+    const moyennes = [];
+    Object.keys(TRIMESTRES).forEach(t => {
+        const notes = notesTrimestre(classe, t)[e.id] || {};
+        const moy = moyenneEleveTrimestre(classe, e.id, t);
+        const rg = rangEleveTrimestre(classe, e.id, t);
+        moyennes.push(moy);
+        html += `<h4 style="margin:12px 0 6px; color:#3E2415;">${esc(TRIMESTRES[t])}</h4>`;
+        if (moy === null) { html += '<p style="font-size:0.9em;"><i>Aucune note saisie.</i></p>'; return; }
+        html += `<table><thead><tr><th style="text-align:left;">Matière</th><th>Coef</th><th>Note /20</th><th>Note × Coef</th></tr></thead><tbody>`;
+        mats.forEach(m => {
+            const n = parseFloat(notes[m.code]);
+            html += `<tr><td style="text-align:left;">${esc(m.nom)}</td><td>${m.coef}</td>
+                <td>${isNaN(n) ? '—' : n.toFixed(2)}</td>
+                <td>${isNaN(n) ? '—' : (n * (m.coef || 1)).toFixed(2)}</td></tr>`;
+        });
+        html += `</tbody></table>
+            <p style="font-size:0.9em; margin-top:4px;"><b>Moyenne : ${moy.toFixed(2)}/20</b> — ${esc(appreciationNote(moy))}${rg ? ` — rang ${rg.rang} sur ${rg.sur}` : ''}</p>`;
+    });
+
+    const notees = moyennes.filter(m => m !== null);
+    if (notees.length > 0) {
+        const annuelle = notees.reduce((s, m) => s + m, 0) / notees.length;
+        html += `<p style="margin-top:14px; font-size:1.05em;"><b>Moyenne annuelle : ${annuelle.toFixed(2)}/20</b> — ${esc(appreciationNote(annuelle))}
+                 <span style="font-size:0.85em;">(sur ${notees.length} trimestre(s) noté(s))</span></p>`;
+    }
+
+    const cy = cycleOfNiveau(classe.niveau);
+    html += `<div style="display:flex; justify-content:space-between; margin-top:28px; padding:0 20px; font-size:0.9em;">
+        <div style="text-align:center;">Le ${esc(CYCLES[cy].chefLabel.toLowerCase())}<br><br><br>${chefOfCycle(ec, cy) ? '<b>' + esc(chefOfCycle(ec, cy)) + '</b>' : ''}</div>
+        <div style="text-align:center;">Le Directeur<br><br><br>${ec.direction.directeur ? '<b>' + esc(ec.direction.directeur) + '</b>' : ''}</div>
+    </div>`;
+
+    document.getElementById('printModalTitle').textContent = `Dossier scolaire — ${e.prenom} ${e.nom}`;
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity(`Dossier scolaire édité : ${e.prenom} ${e.nom} (${classe.nom})`, 'export');
+}
+
+// ---------- Alertes : ce qu'un portail de consultation ne fait pas ----------
+// Planète Élève affiche les notes une fois qu'elles sont là. Ici on repère en
+// amont les élèves qui décrochent, pour que l'école agisse avant le conseil.
+
+const ALERTE_SEUIL_MOYENNE = 10;   // sous la moyenne
+const ALERTE_SEUIL_ABSENCES = 5;   // absences cumulées sur l'année
+const ALERTE_BAISSE = 2;           // points perdus d'un trimestre à l'autre
+
+// Retourne la liste des signaux pour un élève, vide s'il va bien.
+function alertesEleve(classe, eleve) {
+    const signaux = [];
+    const pres = countPresences(classe.id, eleve.id);
+    if (pres.abs >= ALERTE_SEUIL_ABSENCES) {
+        signaux.push({ type: 'absences', texte: `${pres.abs} absences` });
+    }
+    const suite = Object.keys(TRIMESTRES)
+        .map(t => moyenneEleveTrimestre(classe, eleve.id, t))
+        .filter(m => m !== null);
+    if (suite.length > 0) {
+        const derniere = suite[suite.length - 1];
+        if (derniere < ALERTE_SEUIL_MOYENNE) {
+            signaux.push({ type: 'moyenne', texte: `moyenne ${derniere.toFixed(2)}/20` });
+        }
+        if (suite.length >= 2) {
+            const chute = suite[suite.length - 2] - derniere;
+            if (chute >= ALERTE_BAISSE) {
+                signaux.push({ type: 'baisse', texte: `baisse de ${chute.toFixed(2)} pts` });
+            }
+        }
+    }
+    return signaux;
+}
+
+function renderAlertesPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('alertesContenu');
+    if (!box) return;
+
+    const lignes = [];
+    ec.classes.forEach(classe => {
+        classe.eleves.forEach(eleve => {
+            const signaux = alertesEleve(classe, eleve);
+            if (signaux.length > 0) lignes.push({ classe, eleve, signaux });
+        });
+    });
+    // Les cas les plus lourds d'abord
+    lignes.sort((a, b) => b.signaux.length - a.signaux.length);
+
+    const totalEleves = ec.classes.reduce((s, c) => s + c.eleves.length, 0);
+    if (totalEleves === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucun élève inscrit. Les alertes apparaîtront dès que des notes et des absences seront saisies.</p></div>';
+        return;
+    }
+    if (lignes.length === 0) {
+        box.innerHTML = `<div class="alert alert-info">Aucun signal d'alerte sur les <strong>${totalEleves}</strong> élève(s) inscrit(s).</div>`;
+        return;
+    }
+
+    // Orange pour l'assiduité, rouge pour le niveau scolaire.
+    const pastille = s => {
+        const fond = s.type === 'absences' ? '#c2620f' : '#b91c1c';
+        return `<span style="display:inline-block; background:${fond}; color:#fff; padding:2px 9px;
+                     border-radius:999px; font-size:0.78em; font-weight:700; margin:0 4px 3px 0;
+                     white-space:nowrap;">${esc(s.texte)}</span>`;
+    };
+    box.innerHTML = `<div class="alert alert-warning">
+            <strong>${lignes.length}</strong> élève(s) à suivre sur ${totalEleves} inscrit(s).
+            Critères : moyenne sous ${ALERTE_SEUIL_MOYENNE}/20, ${ALERTE_SEUIL_ABSENCES} absences ou plus,
+            ou une baisse d'au moins ${ALERTE_BAISSE} points entre deux trimestres.
+        </div>
+        <div class="table-wrapper"><table>
+            <thead><tr><th style="text-align:left;">Élève</th><th>Classe</th><th style="text-align:left;">Signaux</th><th class="no-print">Dossier</th></tr></thead>
+            <tbody>${lignes.map(l => `<tr>
+                <td style="text-align:left; white-space:nowrap;">${esc(l.eleve.prenom)} <strong>${esc(l.eleve.nom)}</strong></td>
+                <td>${esc(l.classe.nom)}</td>
+                <td style="text-align:left;">${l.signaux.map(pastille).join('')}</td>
+                <td class="no-print"><button class="btn btn-sm btn-info" onclick="ouvrirDossierDepuisAlerte('${l.classe.id}', '${l.eleve.id}')">Voir</button></td>
+            </tr>`).join('')}</tbody>
+        </table></div>`;
+}
+
+function ouvrirDossierDepuisAlerte(classeId, eleveId) {
+    showPage('espaceEleve');
+    document.getElementById('espaceClasseSelect').value = classeId;
+    onEspaceClasseChange();
+    document.getElementById('espaceEleveSelect').value = eleveId;
+    renderEspaceEleve();
+}
+
+// ---------- Registre des sortants ----------
+function renderSortantsPage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('sortantsContenu');
+    if (!box) return;
+    const sortants = ec.sortants || [];
+    if (sortants.length === 0) {
+        box.innerHTML = '<div class="empty-state"><p>Aucun ancien élève enregistré. Le registre se remplit lors des passages de classe.</p></div>';
+        return;
+    }
+    const tri = [...sortants].sort((a, b) =>
+        String(b.anneeSortie).localeCompare(String(a.anneeSortie)) ||
+        (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr'));
+    box.innerHTML = `<p style="font-size:0.9em; color:#5c4a38;"><strong>${sortants.length}</strong> ancien(s) élève(s) archivé(s).</p>
+        <div class="table-wrapper"><table>
+            <thead><tr><th style="text-align:left;">Élève</th><th>IEN</th><th>Dernière classe</th><th>Année</th><th>Motif</th></tr></thead>
+            <tbody>${tri.map(s => `<tr>
+                <td style="text-align:left; white-space:nowrap;">${esc(s.prenom)} <strong>${esc(s.nom)}</strong></td>
+                <td>${s.ien ? esc(s.ien) : '—'}</td>
+                <td>${esc(s.classeSortie || '—')}</td>
+                <td>${esc(String(s.anneeSortie || '—'))}</td>
+                <td>${esc(s.motif || '—')}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>`;
 }
 
 // ---------- Passage de classe (fin d'année) ----------
