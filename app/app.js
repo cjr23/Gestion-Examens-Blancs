@@ -2665,7 +2665,8 @@ function countGradesEntered(levelData, tour) {
 
 // ========== MENTIONS (Terminale only) ==========
 function getMention(moyenne, level) {
-    if (level === 'bfem3') return '';
+    // Le BFEM et le CFEE ne décernent pas de mention : seuls les BAC en ont.
+    if (level === 'bfem3' || level === 'cfeeCM2') return '';
     if (moyenne >= 16) return 'Très Bien';
     if (moyenne >= 14) return 'Bien';
     if (moyenne >= 12) return 'Assez Bien';
