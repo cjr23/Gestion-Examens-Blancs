@@ -5307,11 +5307,24 @@ function populateClasseProfSelect(selectedId) {
     });
 }
 
+// Les niveaux viennent de CLASSE_NIVEAUX, groupés par cycle : la liste était
+// figée dans le HTML et ignorait le primaire, rendant les classes de CI à CM2
+// impossibles à créer depuis l'interface.
+function populateClasseNiveauSelect(selected) {
+    const sel = document.getElementById('classeNiveau');
+    const esc = Security.escapeHTML;
+    sel.innerHTML = Object.keys(CYCLES).map(cy =>
+        `<optgroup label="${esc(CYCLES[cy].label)}">` +
+        CYCLES[cy].niveaux.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('') +
+        '</optgroup>').join('');
+    sel.value = CLASSE_NIVEAUX.includes(selected) ? selected : CLASSE_NIVEAUX[0];
+}
+
 function showAddClasseModal() {
     document.getElementById('classeModalTitle').textContent = 'Ajouter une classe';
     document.getElementById('editClasseId').value = '';
     document.getElementById('classeNom').value = '';
-    document.getElementById('classeNiveau').value = '6ème';
+    populateClasseNiveauSelect('6ème');
     populateClasseProfSelect('');
     document.getElementById('classeModal').classList.add('show');
 }
@@ -5322,7 +5335,7 @@ function editClasse(id) {
     document.getElementById('classeModalTitle').textContent = 'Modifier la classe';
     document.getElementById('editClasseId').value = c.id;
     document.getElementById('classeNom').value = c.nom;
-    document.getElementById('classeNiveau').value = c.niveau;
+    populateClasseNiveauSelect(c.niveau);
     populateClasseProfSelect(c.profId || '');
     document.getElementById('classeModal').classList.add('show');
 }
@@ -5448,11 +5461,19 @@ function saveEleve() {
     const prenom = document.getElementById('elevePrenom').value.trim();
     const nom = document.getElementById('eleveNom').value.trim();
     if (!prenom || !nom) { toast('Prénom et nom sont requis.', 'warning'); return; }
+    // Le module Examens validait déjà ses saisies, pas celui-ci : un nom
+    // contenant du HTML était accepté puis échappé à l'affichage seulement.
+    const prenomCheck = Security.validateName(prenom, { field: 'Le prénom' });
+    if (!prenomCheck.ok) { toast(prenomCheck.error, 'error', 5000); return; }
+    const nomCheck = Security.validateName(nom, { field: 'Le nom' });
+    if (!nomCheck.ok) { toast(nomCheck.error, 'error', 5000); return; }
+    const ienCheck = Security.validateText(document.getElementById('eleveIEN').value, { maxLength: 40, field: "L'IEN" });
+    if (!ienCheck.ok) { toast(ienCheck.error, 'error', 5000); return; }
     const eleve = {
-        prenom: prenom,
-        nom: nom,
+        prenom: prenomCheck.value,
+        nom: nomCheck.value,
         // IEN : identifiant attribué par l'Inspection, l'application ne fait que le stocker.
-        ien: document.getElementById('eleveIEN').value.trim(),
+        ien: ienCheck.value,
         sexe: selectedEleveSexe,
         dateNaissance: document.getElementById('eleveDateNaissance').value || '',
         telephone: document.getElementById('eleveTelTuteur').value.trim(),
