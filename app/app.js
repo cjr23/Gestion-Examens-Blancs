@@ -570,7 +570,16 @@ const LEVELS = {
             { name: 'Problème', code: 'PB', coef: 2 },
             { name: 'Étude du milieu', code: 'EDM', coef: 2 }
         ],
-        seuilAdmis: 90, seuil2eTour: 72, seuilAdmis2: 90, coefTotal: 9, coefTotal2: 9, anoPrefix: 'E'
+        seuilAdmis: 90, seuil2eTour: 79, seuilAdmis2: 90, coefTotal: 9, coefTotal2: 9, anoPrefix: 'E',
+        // Le CFEE n'a pas de second tour mais un repêchage par bandes, exprimées
+        // en pourcentage du total maximal (coefTotal × 20) :
+        //   ≥ 50 %          admis d'office
+        //   ≥ 48 % (−2 pts) admis après repêchage automatique
+        //   ≥ 44 % (−6 pts) soumis à la commission
+        //   en dessous      ajourné
+        // Chiffres relevés dans la presse, pas dans le texte officiel :
+        // à faire confirmer par l'IEF avant une délibération réelle.
+        repechage: { auto: 0.48, commission: 0.44 }
     },
     bfem3: {
         label: 'BFEM Blanc - 3ème', shortLabel: '3ème', examLabel: 'EXAMEN BLANC', className: '3ème',
@@ -1439,9 +1448,22 @@ function calculateResults1() {
         const moyenne = total / cTotal;
         const sAdmis = coefUsed < ld.coefTotal ? cTotal * 10 : ld.seuilAdmis;
         const s2e = coefUsed < ld.coefTotal ? cTotal * 8 : ld.seuil2eTour;
-        let decision = total >= sAdmis ? 'Admis' : total >= s2e ? '2ème Tour' : 'Ajourné';
+        // Repêchage par bandes (CFEE) ou logique à deux tours (BFEM, BAC).
+        // On garde les trois décisions structurantes — le reste de l'application
+        // s'appuie dessus — et on précise la nuance dans `detail`.
+        const repechage = LEVELS[currentLevel].repechage;
+        let decision, detail = '';
+        if (repechage && coefUsed === ld.coefTotal) {
+            const part = total / (cTotal * 20);
+            if (part >= 0.5)                     { decision = 'Admis';     detail = 'Admis d\'office'; }
+            else if (part >= repechage.auto)     { decision = 'Admis';     detail = 'Repêchage automatique'; }
+            else if (part >= repechage.commission) { decision = '2ème Tour'; detail = 'Soumis à commission'; }
+            else                                 { decision = 'Ajourné'; }
+        } else {
+            decision = total >= sAdmis ? 'Admis' : total >= s2e ? '2ème Tour' : 'Ajourné';
+        }
         const mention = decision === 'Admis' ? getMention(moyenne, currentLevel) : '';
-        ld.results1.push({ key: k, student: st, total: Math.round(total * 100) / 100, moyenne, coefUsed: cTotal, decision, mention, rang: 0 });
+        ld.results1.push({ key: k, student: st, total: Math.round(total * 100) / 100, moyenne, coefUsed: cTotal, decision, detail, mention, rang: 0 });
     });
     ld.results1.sort((a, b) => b.moyenne - a.moyenne);
     ld.results1.forEach((r, i) => r.rang = i + 1);
@@ -1470,11 +1492,17 @@ function showResults1Tab(tab, btnEl) {
     if (tab !== 'all') { filtered.sort((a, b) => b.moyenne - a.moyenne); filtered.forEach((r, i) => r.rf = i + 1); }
     const titles = { all: 'RÉSULTATS COMPLETS - 1er TOUR', admis: "ADMIS D'OFFICE", tour2: 'ADMIS AU 2ÈME GROUPE', ajourne: 'AJOURNÉS' };
     let html = docHeader(titles[tab], LEVELS[currentLevel].examLabel + ' ' + appData.year + ' - ' + LEVELS[currentLevel].className);
+    // Le CFEE n'a pas de mention mais un détail de repêchage : même colonne, autre contenu.
+    const repechage = !!LEVELS[currentLevel].repechage;
     const showMention = currentLevel !== 'bfem3';
-    html += `<table><thead><tr><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Total</th><th>Moyenne</th><th>Rang</th><th>Décision</th>${showMention ? '<th>Mention</th>' : ''}</tr></thead><tbody>`;
+    const enteteDerniere = repechage ? 'Précision' : 'Mention';
+    html += `<table><thead><tr><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Total</th><th>Moyenne</th><th>Rang</th><th>Décision</th>${showMention ? `<th>${enteteDerniere}</th>` : ''}</tr></thead><tbody>`;
     filtered.forEach(r => {
         const cls = r.decision === 'Admis' ? 'admis' : r.decision === '2ème Tour' ? 'deuxieme-tour' : 'ajourne';
-        const mentionHtml = showMention ? `<td><span class="mention-tag ${getMentionClass(r.mention || '')}">${r.mention || '-'}</span></td>` : '';
+        const mentionHtml = !showMention ? ''
+            : repechage
+                ? `<td>${Security.escapeHTML(r.detail || '-')}</td>`
+                : `<td><span class="mention-tag ${getMentionClass(r.mention || '')}">${r.mention || '-'}</span></td>`;
         html += `<tr><td>${r.student.numTable}</td><td style="text-align:left;">${Security.escapeHTML(r.student.prenom)}</td><td style="text-align:left;">${Security.escapeHTML(r.student.nom)}</td>
             <td>${r.total}</td><td>${r.moyenne.toFixed(2)}</td><td>${tab === 'all' ? r.rang : r.rf}</td><td class="${cls}">${r.decision}</td>${mentionHtml}</tr>`;
     });
