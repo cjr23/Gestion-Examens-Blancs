@@ -250,6 +250,10 @@
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <span class="nav-text">Espace Élève</span>
                 </button>
+                <button onclick="showPage('cahierTexte', this)" data-page="cahierTexte" data-label="Cahier de texte">
+                    <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+                    <span class="nav-text">Cahier de texte</span>
+                </button>
                 <button onclick="showPage('alertes', this)" data-page="alertes" data-label="Alertes &amp; Suivi">
                     <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                     <span class="nav-text">Alertes &amp; Suivi</span>
@@ -694,6 +698,16 @@
                 <button class="btn btn-info" onclick="imprimerDossierEleve()">Éditer le dossier scolaire (PDF)</button>
             </div>
             <div id="espaceEleveContenu"></div>
+        </div>
+    </div>
+
+    <!-- CAHIER DE TEXTE PAGE (École) -->
+    <div class="page" id="page-cahierTexte">
+        <div class="card">
+            <h2>Cahier de texte</h2>
+            <div class="alert alert-info">Ce qui a été traité en classe et les devoirs donnés, séance par séance. Remplace le cahier papier — et garde la mémoire de l'année en cas d'inspection ou de remplacement d'un professeur.</div>
+            <div class="form-group"><label>Classe</label><select id="cahierClasseSelect" style="width:240px;" onchange="renderCahierTexte()"></select></div>
+            <div id="cahierContenu"></div>
         </div>
     </div>
 
@@ -1161,6 +1175,27 @@
         <div class="modal-actions">
             <button class="btn btn-danger" onclick="closeModal('eleveModal')">Annuler</button>
             <button class="btn btn-success" onclick="saveEleve()">Sauvegarder</button>
+        </div>
+    </div>
+</div>
+
+<!-- SÉANCE (CAHIER DE TEXTE) MODAL -->
+<div class="modal-overlay" id="seanceModal">
+    <div class="modal" style="max-width:560px;">
+        <h3 id="seanceModalTitle">Nouvelle séance</h3>
+        <input type="hidden" id="seanceClasseId" value="">
+        <input type="hidden" id="seanceId" value="">
+        <div class="form-row">
+            <div class="form-group"><label>Date de la séance</label><input type="date" id="seanceDate"></div>
+            <div class="form-group"><label>Matière</label><select id="seanceMatiere" style="width:200px;"></select></div>
+        </div>
+        <div class="form-group"><label>Professeur (optionnel)</label><select id="seanceProf" style="width:100%;"></select></div>
+        <div class="form-group"><label>Contenu de la séance</label><textarea id="seanceContenu" rows="3" style="width:100%;" placeholder="Ce qui a été traité en classe"></textarea></div>
+        <div class="form-group"><label>Devoirs donnés (optionnel)</label><textarea id="seanceDevoirs" rows="2" style="width:100%;" placeholder="Exercices, leçon à apprendre…"></textarea></div>
+        <div class="form-group"><label>À rendre le (optionnel)</label><input type="date" id="seanceDateRemise"></div>
+        <div class="modal-actions">
+            <button class="btn btn-danger" onclick="closeModal('seanceModal')">Annuler</button>
+            <button class="btn btn-success" onclick="enregistrerSeance()">Enregistrer</button>
         </div>
     </div>
 </div>

@@ -644,7 +644,7 @@ let currentPage = 'dashboard';
 // Chaque module a sa propre navigation ; les pages "Système" sont communes.
 const MODULES = {
     examens: { label: 'Examens Blancs', home: 'dashboard', pages: ['dashboard', 'students', 'grades1', 'results1', 'grades2', 'results2', 'stats', 'documents'] },
-    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'espaceEleve', 'alertes', 'sortants', 'matieres', 'presences', 'notesBulletins', 'professeurs', 'emploiTemps'] },
+    ecole:   { label: 'École',          home: 'ecole',     pages: ['ecole', 'classes', 'espaceEleve', 'alertes', 'sortants', 'matieres', 'presences', 'cahierTexte', 'notesBulletins', 'professeurs', 'emploiTemps'] },
     admin:   { label: 'Administration', home: 'personnel', pages: ['personnel'] },
     compta:  { label: 'Comptabilité',   home: 'compta',    pages: ['compta', 'inscriptions', 'paiements', 'journalCaisse', 'depenses'] }
 };
@@ -892,6 +892,7 @@ function refreshCurrentPage() {
     if (currentPage === 'espaceEleve') renderEspaceElevePage();
     if (currentPage === 'alertes') renderAlertesPage();
     if (currentPage === 'sortants') renderSortantsPage();
+    if (currentPage === 'cahierTexte') renderCahierTextePage();
     if (currentPage === 'professeurs') renderProfsTable();
     if (currentPage === 'matieres') renderEcoleMatieres();
     if (currentPage === 'presences') renderPresencesPage();
@@ -2422,13 +2423,61 @@ ${sheets}
 // ========== BACKUP / RESTORE ==========
 function showBackupModal() { document.getElementById('backupModal').classList.add('show'); }
 
+// Date du dernier export, pour pouvoir rappeler d'en refaire un.
+const DERNIERE_SAUVEGARDE_KEY = 'examBlanc_derniereSauvegarde';
+const RAPPEL_SAUVEGARDE_JOURS = 7;
+
 function exportBackupJSON() {
     const json = JSON.stringify(appData, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     const date = new Date().toISOString().slice(0, 10);
     a.download = `Backup_ExamBlanc_${date}.json`; a.click();
+    try { localStorage.setItem(DERNIERE_SAUVEGARDE_KEY, date); } catch (e) {}
+    masquerRappelSauvegarde();
     toast('Sauvegarde JSON exportée.', 'success');
+}
+
+// Toutes les données vivent dans le navigateur : un vidage de cache efface
+// l'année. Tant que l'application n'a pas de serveur, le seul filet est
+// l'export manuel — encore faut-il y penser.
+function joursDepuisSauvegarde() {
+    let derniere;
+    try { derniere = localStorage.getItem(DERNIERE_SAUVEGARDE_KEY); } catch (e) { return null; }
+    if (!derniere) return null;
+    const ms = Date.now() - new Date(derniere + 'T00:00:00').getTime();
+    return Math.floor(ms / 86400000);
+}
+
+function masquerRappelSauvegarde() {
+    const el = document.getElementById('rappelSauvegarde');
+    if (el) el.remove();
+}
+
+function verifierRappelSauvegarde() {
+    masquerRappelSauvegarde();
+    // Rien à sauvegarder tant que l'établissement est vide
+    const ec = appData.ecole || {};
+    const aDesDonnees = (ec.classes || []).length > 0 ||
+        Object.keys(appData.levels || {}).some(lv => (appData.levels[lv].students || []).length > 0);
+    if (!aDesDonnees) return;
+
+    const jours = joursDepuisSauvegarde();
+    if (jours !== null && jours < RAPPEL_SAUVEGARDE_JOURS) return;
+
+    const banniere = document.createElement('div');
+    banniere.id = 'rappelSauvegarde';
+    banniere.className = 'alert alert-warning';
+    banniere.style.cssText = 'margin:0 0 12px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;';
+    banniere.innerHTML = `<span>${jours === null
+            ? 'Aucune sauvegarde enregistrée. Vos données ne vivent que dans ce navigateur : un vidage de cache les effacerait.'
+            : `Dernière sauvegarde il y a <strong>${jours}</strong> jour(s). Pensez à exporter avant de perdre du travail.`}</span>
+        <span class="btn-group no-print">
+            <button class="btn btn-sm btn-success" onclick="exportBackupJSON()">Sauvegarder maintenant</button>
+            <button class="btn btn-sm btn-outline" onclick="masquerRappelSauvegarde()">Plus tard</button>
+        </span>`;
+    const zone = document.querySelector('.content-area .header');
+    if (zone) zone.insertAdjacentElement('afterend', banniere);
 }
 
 function importBackupJSON(input) {
@@ -2887,6 +2936,7 @@ function init() {
     ensureEleveIds();
     checkSession();
     applyHiddenModules();
+    verifierRappelSauvegarde();
     populateYearSelect();
     updateLevelTags();
     renderDashboard();
@@ -4928,6 +4978,8 @@ function getEcoleData() {
     if (!Array.isArray(appData.ecole.preinscriptions)) appData.ecole.preinscriptions = [];
     // Anciens élèves : sortis ou diplômés, conservés pour l'historique
     if (!Array.isArray(appData.ecole.sortants)) appData.ecole.sortants = [];
+    // Cahier de texte : { classeId: [ { id, date, matiereCode, profId, contenu, devoirs, dateRemise } ] }
+    if (!appData.ecole.cahierTexte || typeof appData.ecole.cahierTexte !== 'object') appData.ecole.cahierTexte = {};
     // Matières des bulletins, désormais une grille par cycle.
     // Migration : l'ancien format était un tableau plat commun à tout l'établissement.
     // On le conserve pour le moyen et le secondaire (personnalisations incluses)
@@ -6525,6 +6577,198 @@ function imprimerDossierEleve() {
     document.getElementById('printModalContent').innerHTML = html;
     document.getElementById('printModal').classList.add('show');
     logActivity(`Dossier scolaire édité : ${e.prenom} ${e.nom} (${classe.nom})`, 'export');
+}
+
+// ---------- Cahier de texte numérique ----------
+// Remplace le cahier de texte papier : ce qui a été traité en classe, et les
+// devoirs donnés. Planète 3 en fait un argument central ; tous les logiciels
+// scolaires sénégalais l'ont. C'est aussi la mémoire de l'année en cas
+// d'inspection ou de remplacement d'un professeur.
+
+function seancesDeClasse(ec, classeId) {
+    if (!Array.isArray(ec.cahierTexte[classeId])) ec.cahierTexte[classeId] = [];
+    return ec.cahierTexte[classeId];
+}
+
+function renderCahierTextePage() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const sel = document.getElementById('cahierClasseSelect');
+    if (!sel) return;
+    if (ec.classes.length === 0) {
+        sel.innerHTML = '';
+        document.getElementById('cahierContenu').innerHTML =
+            '<div class="empty-state"><p>Aucune classe. Créez une classe pour ouvrir son cahier de texte.</p></div>';
+        return;
+    }
+    const prev = sel.value;
+    const tri = [...ec.classes].sort((a, b) =>
+        (CLASSE_NIVEAUX.indexOf(a.niveau) - CLASSE_NIVEAUX.indexOf(b.niveau)) || a.nom.localeCompare(b.nom));
+    sel.innerHTML = Object.keys(CYCLES).map(cy => {
+        const cls = tri.filter(c => cycleOfNiveau(c.niveau) === cy);
+        if (cls.length === 0) return '';
+        return `<optgroup label="${esc(CYCLES[cy].label)}">` +
+            cls.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('') + '</optgroup>';
+    }).join('');
+    if (prev && tri.some(c => c.id === prev)) sel.value = prev;
+    renderCahierTexte();
+}
+
+function renderCahierTexte() {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const box = document.getElementById('cahierContenu');
+    const classeId = document.getElementById('cahierClasseSelect').value;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) { box.innerHTML = ''; return; }
+
+    const mats = matieresOfClasse(ec, classe);
+    const nomMatiere = code => { const m = mats.find(x => x.code === code); return m ? m.nom : code; };
+    const nomProf = id => { const p = ec.professeurs.find(x => x.id === id); return p ? p.prenom + ' ' + p.nom : ''; };
+
+    const seances = [...seancesDeClasse(ec, classeId)].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    // Devoirs encore à rendre : le rappel que le papier ne donne jamais
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    const aVenir = seances
+        .filter(s => s.devoirs && s.dateRemise && s.dateRemise >= aujourdhui)
+        .sort((a, b) => String(a.dateRemise).localeCompare(String(b.dateRemise)));
+
+    let html = `<div class="btn-group no-print" style="margin-bottom:12px;">
+        <button class="btn btn-primary" onclick="ouvrirSeanceModal('${classeId}')">+ Nouvelle séance</button>
+        <button class="btn btn-info" onclick="imprimerCahierTexte('${classeId}')">Imprimer le cahier</button>
+    </div>`;
+
+    if (aVenir.length > 0) {
+        html += `<div class="alert alert-warning"><strong>Devoirs à rendre :</strong> ` +
+            aVenir.map(s => `${esc(nomMatiere(s.matiereCode))} pour le ${formatDateNaissanceFR(s.dateRemise)}`).join(' · ') +
+            `</div>`;
+    }
+
+    if (seances.length === 0) {
+        box.innerHTML = html + '<div class="empty-state"><p>Aucune séance enregistrée pour cette classe.</p></div>';
+        return;
+    }
+
+    html += `<p style="font-size:0.9em; color:#5c4a38;"><strong>${seances.length}</strong> séance(s) enregistrée(s).</p>`;
+    html += seances.map(s => `<div class="card" style="margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div>
+                <strong>${formatDateNaissanceFR(s.date)}</strong> —
+                <span style="color:#8a6d3b;">${esc(nomMatiere(s.matiereCode))}</span>
+                ${s.profId ? `<span style="font-size:0.88em; color:#7a6a58;"> · ${esc(nomProf(s.profId))}</span>` : ''}
+            </div>
+            <div class="btn-group no-print">
+                <button class="btn btn-sm btn-primary" onclick="ouvrirSeanceModal('${classeId}', '${s.id}')">Modifier</button>
+                <button class="btn btn-sm btn-danger" onclick="supprimerSeance('${classeId}', '${s.id}')">Supprimer</button>
+            </div>
+        </div>
+        ${s.contenu ? `<p style="margin-top:8px; white-space:pre-wrap;">${esc(s.contenu)}</p>` : ''}
+        ${s.devoirs ? `<div style="margin-top:8px; padding:8px 12px; background:#faf8f5; border-radius:8px; font-size:0.92em;">
+            <strong>Devoirs :</strong> <span style="white-space:pre-wrap;">${esc(s.devoirs)}</span>
+            ${s.dateRemise ? ` <em>— à rendre le ${formatDateNaissanceFR(s.dateRemise)}</em>` : ''}
+        </div>` : ''}
+    </div>`).join('');
+
+    box.innerHTML = html;
+}
+
+function ouvrirSeanceModal(classeId, seanceId) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) return;
+    const s = seanceId ? seancesDeClasse(ec, classeId).find(x => x.id === seanceId) : null;
+
+    document.getElementById('seanceModalTitle').textContent = s ? 'Modifier la séance' : 'Nouvelle séance';
+    document.getElementById('seanceClasseId').value = classeId;
+    document.getElementById('seanceId').value = s ? s.id : '';
+    document.getElementById('seanceDate').value = s ? s.date : new Date().toISOString().slice(0, 10);
+    document.getElementById('seanceMatiere').innerHTML = matieresOfClasse(ec, classe).map(m =>
+        `<option value="${esc(m.code)}"${s && s.matiereCode === m.code ? ' selected' : ''}>${esc(m.nom)}</option>`).join('');
+    document.getElementById('seanceProf').innerHTML = '<option value="">— Non précisé —</option>' +
+        ec.professeurs.map(p =>
+            `<option value="${p.id}"${s && s.profId === p.id ? ' selected' : ''}>${esc(p.prenom)} ${esc(p.nom)}</option>`).join('');
+    document.getElementById('seanceContenu').value = s ? (s.contenu || '') : '';
+    document.getElementById('seanceDevoirs').value = s ? (s.devoirs || '') : '';
+    document.getElementById('seanceDateRemise').value = s ? (s.dateRemise || '') : '';
+    document.getElementById('seanceModal').classList.add('show');
+}
+
+function enregistrerSeance() {
+    const ec = getEcoleData();
+    const classeId = document.getElementById('seanceClasseId').value;
+    const date = document.getElementById('seanceDate').value;
+    if (!date) { toast('La date de la séance est requise.', 'warning'); return; }
+    const contenu = document.getElementById('seanceContenu').value.trim();
+    const devoirs = document.getElementById('seanceDevoirs').value.trim();
+    if (!contenu && !devoirs) { toast('Renseignez au moins le contenu ou les devoirs.', 'warning'); return; }
+    const dateRemise = document.getElementById('seanceDateRemise').value;
+    if (dateRemise && dateRemise < date) { toast('La date de remise ne peut pas précéder la séance.', 'warning'); return; }
+
+    const seances = seancesDeClasse(ec, classeId);
+    const id = document.getElementById('seanceId').value;
+    const donnees = {
+        date: date,
+        matiereCode: document.getElementById('seanceMatiere').value,
+        profId: document.getElementById('seanceProf').value,
+        contenu: contenu,
+        devoirs: devoirs,
+        dateRemise: dateRemise
+    };
+    if (id) {
+        const s = seances.find(x => x.id === id);
+        if (!s) return;
+        Object.assign(s, donnees);
+        logActivity('Séance modifiée au cahier de texte', 'config');
+    } else {
+        seances.push(Object.assign({ id: ecoleUid('sc_') }, donnees));
+        logActivity('Séance ajoutée au cahier de texte', 'config');
+    }
+    saveData();
+    closeModal('seanceModal');
+    renderCahierTexte();
+    toast('Séance enregistrée.', 'success');
+}
+
+function supprimerSeance(classeId, seanceId) {
+    showConfirm('Supprimer cette séance ?', 'Elle disparaîtra du cahier de texte.', () => {
+        const ec = getEcoleData();
+        ec.cahierTexte[classeId] = seancesDeClasse(ec, classeId).filter(s => s.id !== seanceId);
+        saveData();
+        renderCahierTexte();
+        toast('Séance supprimée.', 'success');
+    });
+}
+
+function imprimerCahierTexte(classeId) {
+    const ec = getEcoleData();
+    const esc = Security.escapeHTML;
+    const classe = ec.classes.find(c => c.id === classeId);
+    if (!classe) return;
+    const seances = [...seancesDeClasse(ec, classeId)].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    if (seances.length === 0) { toast('Aucune séance à imprimer.', 'warning'); return; }
+    const mats = matieresOfClasse(ec, classe);
+    const nomMatiere = code => { const m = mats.find(x => x.code === code); return m ? m.nom : code; };
+    const nomProf = id => { const p = ec.professeurs.find(x => x.id === id); return p ? p.prenom + ' ' + p.nom : '—'; };
+
+    let html = docHeader('CAHIER DE TEXTE', `${esc(classe.nom)} (${esc(classe.niveau)}) — Année ${appData.year}`);
+    html += `<table><thead><tr>
+        <th>Date</th><th>Matière</th><th>Professeur</th>
+        <th style="text-align:left;">Contenu de la séance</th><th style="text-align:left;">Devoirs</th>
+    </tr></thead><tbody>` +
+        seances.map(s => `<tr>
+            <td style="white-space:nowrap;">${formatDateNaissanceFR(s.date)}</td>
+            <td>${esc(nomMatiere(s.matiereCode))}</td>
+            <td>${esc(nomProf(s.profId))}</td>
+            <td style="text-align:left;">${esc(s.contenu || '—')}</td>
+            <td style="text-align:left;">${s.devoirs ? esc(s.devoirs) + (s.dateRemise ? `<br><i>pour le ${formatDateNaissanceFR(s.dateRemise)}</i>` : '') : '—'}</td>
+        </tr>`).join('') + '</tbody></table>';
+
+    document.getElementById('printModalTitle').textContent = `Cahier de texte — ${classe.nom}`;
+    document.getElementById('printModalContent').innerHTML = html;
+    document.getElementById('printModal').classList.add('show');
+    logActivity(`Cahier de texte imprimé : ${classe.nom}`, 'export');
 }
 
 // ---------- Alertes : ce qu'un portail de consultation ne fait pas ----------
