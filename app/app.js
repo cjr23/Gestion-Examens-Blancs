@@ -2435,7 +2435,7 @@ function exportBackupJSON() {
     const nbPieces = Object.keys((appData.ecole || {}).dossiers || {})
         .reduce((s, id) => s + Object.keys(appData.ecole.dossiers[id]).length, 0);
     if (nbPieces > 0) {
-        toast(`${nbPieces} pièce(s) justificative(s) ne sont pas incluses : conservez aussi les fichiers d'origine.`, 'warning', 7000);
+        toast(`${nbPieces} pièce(s) justificative(s) ne sont pas incluses : exportez aussi l'archive ZIP depuis Dossiers élèves.`, 'warning', 7000);
     }
     const json = JSON.stringify(appData, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -6629,6 +6629,147 @@ function docsTransaction(mode, action) {
 function enregistrerFichier(id, blob) { return docsTransaction('readwrite', s => s.put({ id: id, blob: blob })); }
 function lireFichier(id)             { return docsTransaction('readonly',  s => s.get(id)); }
 function effacerFichier(id)          { return docsTransaction('readwrite', s => s.delete(id)); }
+
+// ---------- Archive ZIP des pièces ----------
+// La sauvegarde JSON n'emporte pas les fichiers d'IndexedDB : sans cet export,
+// une réinstallation perdrait tous les dossiers. Méthode « stored », sans
+// compression — les JPEG et les PDF sont déjà compressés, et cela évite une
+// bibliothèque externe qui casserait le fonctionnement hors connexion.
+
+const TABLE_CRC32 = (() => {
+    const t = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        t[i] = c >>> 0;
+    }
+    return t;
+})();
+
+function crc32(octets) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < octets.length; i++) c = TABLE_CRC32[(c ^ octets[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// entrees : [ { nom: 'chemin/dans/archive.jpg', donnees: Uint8Array } ]
+function construireZip(entrees) {
+    const encodeur = new TextEncoder();
+    const morceaux = [], central = [];
+    let offset = 0;
+    const d = new Date();
+    const heure = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+
+    entrees.forEach(entree => {
+        const nom = encodeur.encode(entree.nom);
+        const donnees = entree.donnees;
+        const crc = crc32(donnees);
+
+        const local = new DataView(new ArrayBuffer(30));
+        local.setUint32(0, 0x04034b50, true);
+        local.setUint16(4, 20, true);
+        local.setUint16(6, 0x0800, true);   // noms en UTF-8
+        local.setUint16(8, 0, true);        // méthode 0 = stocké
+        local.setUint16(10, heure, true);
+        local.setUint16(12, date, true);
+        local.setUint32(14, crc, true);
+        local.setUint32(18, donnees.length, true);
+        local.setUint32(22, donnees.length, true);
+        local.setUint16(26, nom.length, true);
+        local.setUint16(28, 0, true);
+        morceaux.push(new Uint8Array(local.buffer), nom, donnees);
+
+        const dir = new DataView(new ArrayBuffer(46));
+        dir.setUint32(0, 0x02014b50, true);
+        dir.setUint16(4, 20, true);
+        dir.setUint16(6, 20, true);
+        dir.setUint16(8, 0x0800, true);
+        dir.setUint16(10, 0, true);
+        dir.setUint16(12, heure, true);
+        dir.setUint16(14, date, true);
+        dir.setUint32(16, crc, true);
+        dir.setUint32(20, donnees.length, true);
+        dir.setUint32(24, donnees.length, true);
+        dir.setUint16(28, nom.length, true);
+        dir.setUint16(30, 0, true);
+        dir.setUint16(32, 0, true);
+        dir.setUint16(34, 0, true);
+        dir.setUint16(36, 0, true);
+        dir.setUint32(38, 0, true);
+        dir.setUint32(42, offset, true);
+        central.push(new Uint8Array(dir.buffer), nom);
+
+        offset += 30 + nom.length + donnees.length;
+    });
+
+    const tailleCentral = central.reduce((s, m) => s + m.length, 0);
+    const fin = new DataView(new ArrayBuffer(22));
+    fin.setUint32(0, 0x06054b50, true);
+    fin.setUint16(4, 0, true);
+    fin.setUint16(6, 0, true);
+    fin.setUint16(8, entrees.length, true);
+    fin.setUint16(10, entrees.length, true);
+    fin.setUint32(12, tailleCentral, true);
+    fin.setUint32(16, offset, true);
+    fin.setUint16(20, 0, true);
+
+    return new Blob(morceaux.concat(central, [new Uint8Array(fin.buffer)]), { type: 'application/zip' });
+}
+
+// Caractères interdits dans les noms de fichiers Windows
+function nomSur(texte) {
+    return String(texte || '').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim() || 'sans-nom';
+}
+
+async function exporterPiecesZip() {
+    const ec = getEcoleData();
+    const entrees = [];
+    const manifeste = ['Classe;Eleve;IEN;Piece;Fichier;Depose le'];
+    let introuvables = 0;
+
+    for (const classe of ec.classes) {
+        for (const eleve of classe.eleves) {
+            const dossier = ec.dossiers[eleve.id] || {};
+            for (const code of Object.keys(dossier)) {
+                const piece = dossier[code];
+                const def = ec.piecesRequises.find(p => p.code === code);
+                const libelle = def ? def.nom : code;
+                let res = null;
+                try { res = await lireFichier(piece.fichierId); } catch (e) { res = null; }
+                if (!res || !res.blob) { introuvables++; continue; }
+                const octets = new Uint8Array(await res.blob.arrayBuffer());
+                const extension = (piece.nomFichier.match(/\.[a-zA-Z0-9]+$/) || [''])[0];
+                entrees.push({
+                    nom: `${nomSur(classe.nom)}/${nomSur(eleve.nom + ' ' + eleve.prenom)}/${nomSur(libelle)}${extension}`,
+                    donnees: octets
+                });
+                manifeste.push([classe.nom, eleve.prenom + ' ' + eleve.nom, eleve.ien || '',
+                    libelle, piece.nomFichier, piece.dateDepot].map(v => String(v).replace(/;/g, ',')).join(';'));
+            }
+        }
+    }
+
+    if (entrees.length === 0) {
+        toast('Aucune pièce à exporter.', 'warning');
+        return;
+    }
+
+    // BOM UTF-8 : sans lui, Excel affiche les accents de travers
+    entrees.unshift({ nom: 'manifeste.csv', donnees: new TextEncoder().encode('﻿' + manifeste.join('\r\n')) });
+
+    const blob = construireZip(entrees);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Pieces_${nomSur(appData.school.name)}_${new Date().toISOString().slice(0, 10)}.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+
+    const msg = `${entrees.length - 1} pièce(s) exportée(s) (${formatTaille(blob.size)}).`;
+    toast(introuvables > 0 ? `${msg} ${introuvables} fichier(s) introuvable(s) dans le stockage.` : msg,
+        introuvables > 0 ? 'warning' : 'success', 6000);
+    logActivity(`Archive des pièces exportée : ${entrees.length - 1} fichier(s)`, 'export');
+}
 
 // Pièces demandées à l'inscription. Modifiables : chaque établissement a sa liste.
 const PIECES_DEFAUT = [

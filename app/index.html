@@ -710,7 +710,10 @@
         <div class="card">
             <h2>Dossiers élèves</h2>
             <div class="alert alert-info">Les pièces fournies à l'inscription : extrait de naissance, photos, bulletin précédent… Les fichiers sont conservés <strong>dans le navigateur</strong> (IndexedDB), jamais envoyés sur Internet.</div>
-            <div class="alert alert-warning"><strong>La sauvegarde JSON n'emporte pas ces fichiers</strong> — seulement la liste des pièces déposées. Conservez les originaux (papier ou dossier scanné) tant que l'application n'a pas de serveur.</div>
+            <div class="alert alert-warning"><strong>La sauvegarde JSON n'emporte pas ces fichiers</strong> — seulement la liste des pièces déposées. Exportez l'archive ZIP ci-dessous en complément de la sauvegarde, et rangez les deux au même endroit.</div>
+            <div class="btn-group no-print" style="margin-bottom:12px;">
+                <button class="btn btn-success" onclick="exporterPiecesZip()">Exporter toutes les pièces (ZIP)</button>
+            </div>
             <div class="form-row">
                 <div class="form-group"><label>Classe</label><select id="dossierClasseSelect" style="width:220px;" onchange="onDossierClasseChange()"></select></div>
                 <div class="form-group"><label>Élève</label><select id="dossierEleveSelect" style="width:320px;" onchange="renderDossierEleve()"></select></div>
