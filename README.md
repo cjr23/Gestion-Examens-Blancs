@@ -1,6 +1,8 @@
-# Gestion Examens Blancs
+# SchoolPro — Gestion Scolaire
 
-Application web de gestion scolaire pour le **Collège Jean XXIII** (Tambacounda, Sénégal). Partie de la gestion des examens blancs, elle couvre aujourd'hui l'ensemble du cycle scolaire — de l'inscription d'un élève au CI jusqu'à sa sortie en Terminale : dossiers administratifs, classes, notes, bulletins, assiduité, cahier de texte, emplois du temps, personnel et comptabilité.
+> Simple · Efficace · Connectée
+
+Application web de gestion scolaire pour les établissements sénégalais, développée pour le **Collège Jean XXIII** (Tambacounda). Partie de la gestion des examens blancs, elle couvre aujourd'hui l'ensemble du cycle scolaire — de l'inscription d'un élève au CI jusqu'à sa sortie en Terminale : dossiers administratifs, classes, notes, bulletins, assiduité, cahier de texte, emplois du temps, personnel et comptabilité.
 
 Elle couvre les **trois cycles du système éducatif sénégalais** : Élémentaire (CI – CM2), Moyen (6ème – 3ème) et Secondaire (Seconde – Terminale).
 
@@ -140,7 +142,19 @@ Deux drapeaux en haut de `app/app.js` neutralisent temporairement des parties de
   - [SheetJS / xlsx.js](https://github.com/SheetJS/sheetjs) — import / export Excel
   - [html2pdf.js](https://github.com/eKoopmans/html2pdf.js) — génération de PDF
   - [Chart.js](https://www.chartjs.org/) — graphiques
-- **Polices** : Inter et Plus Jakarta Sans (Google Fonts)
+- **Polices** : Inter (texte) et Plus Jakarta Sans (titres), via Google Fonts
+
+### Charte graphique
+
+Les couleurs sont dérivées du logo, relevées par analyse des dominantes de `app/logo.png` :
+
+| Rôle | Valeur | Usage |
+|------|--------|-------|
+| Navy | `#022557` | Couleur primaire, titres, barre latérale |
+| Bleu vif | `#0179f6` | Accent, éléments actifs, liens |
+| Or | `#fbb903` | Alertes et mises en garde |
+
+Les rouges d'erreur et les verts de réussite restent inchangés : ils portent un sens, pas l'identité.
 
 ---
 
@@ -153,7 +167,7 @@ Gestion-Examens-Blancs/
 │   ├── app.js                   # Logique applicative
 │   ├── style.css                # Styles
 │   ├── config.local.example.js  # Modèle de configuration
-│   └── logo.jpg
+│   └── logo.png                 # Logo SchoolPro (source de la charte)
 ├── .gitignore
 ├── .gitattributes
 └── README.md

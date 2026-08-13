@@ -457,11 +457,11 @@ function initTcDotMap() {
             const sx = r.s[0]*W, sy = r.s[1]*H, ex = r.e[0]*W, ey = r.e[1]*H;
             const x = sx+(ex-sx)*p, y = sy+(ey-sy)*p;
             ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(x,y);
-            ctx.strokeStyle = '#B8A67A'; ctx.lineWidth = 1.5; ctx.stroke();
-            ctx.beginPath(); ctx.arc(sx,sy,3,0,Math.PI*2); ctx.fillStyle='#B8A67A'; ctx.fill();
-            ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle='#d4c4a8'; ctx.fill();
-            ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fillStyle='rgba(212,196,168,0.3)'; ctx.fill();
-            if (p === 1) { ctx.beginPath(); ctx.arc(ex,ey,3,0,Math.PI*2); ctx.fillStyle='#B8A67A'; ctx.fill(); }
+            ctx.strokeStyle = '#0179f6'; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.beginPath(); ctx.arc(sx,sy,3,0,Math.PI*2); ctx.fillStyle='#0179f6'; ctx.fill();
+            ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle='#c3d5f0'; ctx.fill();
+            ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fillStyle='rgba(171,187,209,0.3)'; ctx.fill();
+            if (p === 1) { ctx.beginPath(); ctx.arc(ex,ey,3,0,Math.PI*2); ctx.fillStyle='#0179f6'; ctx.fill(); }
         }
         if (t > 15) startTime = Date.now();
         requestAnimationFrame(draw);
@@ -848,6 +848,16 @@ function selectLevel(level) {
     document.getElementById('lvl-' + level).classList.add('active');
     updateLevelTags();
     refreshCurrentPage();
+}
+
+// L'en-tête portait le nom de l'établissement en dur : SchoolPro est le
+// produit, l'école est une donnée. On l'affiche depuis les paramètres.
+function majEnteteEtablissement() {
+    const el = document.getElementById('headerEtablissement');
+    if (!el) return;
+    const s = appData.school || {};
+    const lieu = s.ia || s.ief || '';
+    el.textContent = s.name ? (s.name + (lieu ? ' — ' + lieu : '')) : 'Gestion Scolaire';
 }
 
 function updateLevelTags() {
@@ -1904,7 +1914,7 @@ function renderStatsForLevel(lv, ld) {
         const mentions = [
             { name: 'Très Bien',   key: 'Très Bien',   color: '#f59e0b', cls: 'mention-tb' },
             { name: 'Bien',        key: 'Bien',        color: '#10b981', cls: 'mention-b' },
-            { name: 'Assez Bien',  key: 'Assez Bien',  color: '#B8A67A', cls: 'mention-ab' },
+            { name: 'Assez Bien',  key: 'Assez Bien',  color: '#0179f6', cls: 'mention-ab' },
             { name: 'Passable',    key: 'Passable',    color: '#6b7280', cls: 'mention-p' }
         ];
         const totalAdm = Math.max(1, allAdmis.length);
@@ -1984,6 +1994,7 @@ function saveSchoolInfo() {
     }
     Object.assign(appData.school, cleaned);
     saveData();
+    majEnteteEtablissement();
     toast('Informations de l\'établissement sauvegardées.', 'success');
 }
 
@@ -2031,12 +2042,12 @@ function saveSubjectsConfig() {
 function docHeader(title, subtitle) {
     const school = appData.school;
     return `<div style="text-align:center; margin-bottom:15px;">
-        <img src="logo.jpg" alt="Logo" style="width:60px; height:60px; border-radius:50%; margin-bottom:8px;">
-        <h3 style="color:#3E2415; margin:4px 0;">${school.name}</h3>
-        <p style="font-size:0.85em; color:#7a6a58;">IA: ${school.ia} / IEF: ${school.ief} - ${appData.year}</p>
-        ${school.dates ? `<p style="font-size:0.85em; color:#5c4a38; margin-top:4px;"><b>Session:</b> ${school.dates}</p>` : ''}
-        ${title ? `<h3 style="color:#3E2415; margin-top:8px; padding-top:8px; border-top:2px solid #B8A67A;">${title}</h3>` : ''}
-        ${subtitle ? `<p style="font-size:0.9em; color:#5c4a38;">${subtitle}</p>` : ''}
+        <img src="logo.png" alt="Logo" style="width:60px; height:60px; border-radius:50%; margin-bottom:8px;">
+        <h3 style="color:#022557; margin:4px 0;">${school.name}</h3>
+        <p style="font-size:0.85em; color:#6b7f9e;">IA: ${school.ia} / IEF: ${school.ief} - ${appData.year}</p>
+        ${school.dates ? `<p style="font-size:0.85em; color:#3d5578; margin-top:4px;"><b>Session:</b> ${school.dates}</p>` : ''}
+        ${title ? `<h3 style="color:#022557; margin-top:8px; padding-top:8px; border-top:2px solid #0179f6;">${title}</h3>` : ''}
+        ${subtitle ? `<p style="font-size:0.9em; color:#3d5578;">${subtitle}</p>` : ''}
     </div>`;
 }
 
@@ -2130,7 +2141,7 @@ function printDocument(type) {
             const showMentionB = currentLevel !== 'bfem3';
             html += `<div class="bulletin-page" ${idx > 0 ? 'style="page-break-before:always; margin-top:30px;"' : ''}>`;
             html += docHeader('BULLETIN DE NOTES', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
-            html += `<div style="display:flex; justify-content:space-between; margin-bottom:12px; padding:10px; background:#f5efe8; border-radius:8px;">
+            html += `<div style="display:flex; justify-content:space-between; margin-bottom:12px; padding:10px; background:#e8f1fd; border-radius:8px;">
                 <div><b>Nom:</b> ${Security.escapeHTML(r.student.nom)}</div>
                 <div><b>Prénom(s):</b> ${Security.escapeHTML(r.student.prenom)}</div>
                 <div><b>N Table:</b> ${r.student.numTable}</div>
@@ -2151,7 +2162,7 @@ function printDocument(type) {
                 html += `<tr><td style="text-align:left;">${sub.name}</td><td>${sub.coef}</td><td>${noteDisplay}</td><td>${note !== null ? nxc.toFixed(2) : '-'}</td></tr>`;
             });
             html += `</tbody></table>`;
-            html += `<div style="display:flex; justify-content:space-between; margin-top:12px; padding:12px; background:#f5efe8; border-radius:8px; font-weight:700;">
+            html += `<div style="display:flex; justify-content:space-between; margin-top:12px; padding:12px; background:#e8f1fd; border-radius:8px; font-weight:700;">
                 <div>Total: ${r.total}</div>
                 <div>Moyenne: ${r.moyenne.toFixed(2)}/20</div>
                 <div>Rang: ${r.rang}/${ld.results1.length}</div>
@@ -2209,7 +2220,7 @@ function printDocument(type) {
         const pctAjDef = ld.results1.length > 0 ? ((ajournesDefinitifs / ld.results1.length) * 100).toFixed(1) : '0.0';
 
         html = docHeader('PROCÈS-VERBAL DE DÉLIBÉRATION', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
-        html += `<div style="margin:15px 0; padding:15px; border:2px solid #3E2415; border-radius:8px;">
+        html += `<div style="margin:15px 0; padding:15px; border:2px solid #022557; border-radius:8px;">
             <p style="margin-bottom:10px;">Le jury de l'${cfg.examLabel.toLowerCase()} session ${appData.year}, réuni en séance de délibération, a arrêté les résultats suivants :</p>
             <table style="width:100%; margin:10px 0;">
                 <tr><td style="padding:6px; border:1px solid #ccc;"><b>Nombre d'inscrits</b></td><td style="padding:6px; border:1px solid #ccc; text-align:center; font-weight:700;">${ld.students.length}</td></tr>
@@ -2218,13 +2229,13 @@ function printDocument(type) {
                 <tr><td style="padding:6px; border:1px solid #ccc;"><b>Admis au 2ème Groupe</b></td><td style="padding:6px; border:1px solid #ccc; text-align:center; font-weight:700; color:#f59e0b;">${tour2.length}</td></tr>
                 <tr><td style="padding:6px; border:1px solid #ccc;"><b>Ajournés</b></td><td style="padding:6px; border:1px solid #ccc; text-align:center; font-weight:700; color:#ef4444;">${ajournés.length}</td></tr>
                 ${admis2.length > 0 ? `<tr><td style="padding:6px; border:1px solid #ccc;"><b>Admis au 2ème Tour</b></td><td style="padding:6px; border:1px solid #ccc; text-align:center; font-weight:700; color:#059669;">${admis2.length}</td></tr>` : ''}
-                <tr style="background:#f5efe8;"><td style="padding:8px; border:1px solid #ccc;"><b>TOTAL ADMIS</b></td><td style="padding:8px; border:1px solid #ccc; text-align:center; font-weight:800; font-size:1.2em;">${totalAdmis} (${pctAdmis}%)</td></tr>
+                <tr style="background:#e8f1fd;"><td style="padding:8px; border:1px solid #ccc;"><b>TOTAL ADMIS</b></td><td style="padding:8px; border:1px solid #ccc; text-align:center; font-weight:800; font-size:1.2em;">${totalAdmis} (${pctAdmis}%)</td></tr>
             </table>
-            <h4 style="margin:15px 0 6px; color:#3E2415;">Récapitulatif général (définitif) :</h4>
+            <h4 style="margin:15px 0 6px; color:#022557;">Récapitulatif général (définitif) :</h4>
             <table style="width:100%; margin:6px 0;">
                 <tr><td style="padding:6px; border:1px solid #ccc;"><b>Admis définitifs</b> (1er + 2ème Tour)</td><td style="padding:6px; border:1px solid #ccc; text-align:center; font-weight:700; color:#10b981;">${totalAdmis} (${pctAdmis}%)</td></tr>
                 <tr><td style="padding:6px; border:1px solid #ccc;"><b>Ajournés définitifs</b></td><td style="padding:6px; border:1px solid #ccc; text-align:center; font-weight:700; color:#ef4444;">${ajournesDefinitifs} (${pctAjDef}%)</td></tr>
-                <tr style="background:#f5efe8;"><td style="padding:8px; border:1px solid #ccc;"><b>RÉSULTAT ${deliberationClose ? 'DÉFINITIF' : 'PROVISOIRE (1er Tour)'}</b></td><td style="padding:8px; border:1px solid #ccc; text-align:center; font-weight:800;">Présents : ${ld.results1.length} — Admis : ${totalAdmis} — Ajournés : ${deliberationClose ? ajournesDefinitifs : ajournés.length}${deliberationClose ? '' : ' — 2ème Tour : ' + tour2.length}</td></tr>
+                <tr style="background:#e8f1fd;"><td style="padding:8px; border:1px solid #ccc;"><b>RÉSULTAT ${deliberationClose ? 'DÉFINITIF' : 'PROVISOIRE (1er Tour)'}</b></td><td style="padding:8px; border:1px solid #ccc; text-align:center; font-weight:800;">Présents : ${ld.results1.length} — Admis : ${totalAdmis} — Ajournés : ${deliberationClose ? ajournesDefinitifs : ajournés.length}${deliberationClose ? '' : ' — 2ème Tour : ' + tour2.length}</td></tr>
             </table>`;
 
         // Mentions recap for Terminale
@@ -2234,7 +2245,7 @@ function printDocument(type) {
             const mB = allAdmis.filter(r => r.mention === 'Bien').length;
             const mAB = allAdmis.filter(r => r.mention === 'Assez Bien').length;
             const mP = allAdmis.filter(r => r.mention === 'Passable').length;
-            html += `<h4 style="margin:12px 0 6px; color:#3E2415;">Répartition des mentions :</h4>
+            html += `<h4 style="margin:12px 0 6px; color:#022557;">Répartition des mentions :</h4>
                 <table style="width:100%; margin-bottom:10px;">
                     <tr><td style="padding:4px 6px; border:1px solid #ccc;">Très Bien</td><td style="padding:4px 6px; border:1px solid #ccc; text-align:center; font-weight:700;">${mTB}</td></tr>
                     <tr><td style="padding:4px 6px; border:1px solid #ccc;">Bien</td><td style="padding:4px 6px; border:1px solid #ccc; text-align:center; font-weight:700;">${mB}</td></tr>
@@ -2247,17 +2258,17 @@ function printDocument(type) {
             <p style="margin-top:8px; font-style:italic;">Les membres du jury :</p>
             <div style="display:flex; justify-content:space-between; margin-top:30px; padding:0 20px;">
                 <div style="text-align:center; min-width:150px;">
-                    <p style="font-size:0.85em; color:#5c4a38;">Le Président du Jury</p>
+                    <p style="font-size:0.85em; color:#3d5578;">Le Président du Jury</p>
                     <div style="height:50px;"></div>
                     <p style="border-top:1px solid #ccc; padding-top:4px; font-size:0.8em;">Nom et signature</p>
                 </div>
                 <div style="text-align:center; min-width:150px;">
-                    <p style="font-size:0.85em; color:#5c4a38;">Le Secrétaire</p>
+                    <p style="font-size:0.85em; color:#3d5578;">Le Secrétaire</p>
                     <div style="height:50px;"></div>
                     <p style="border-top:1px solid #ccc; padding-top:4px; font-size:0.8em;">Nom et signature</p>
                 </div>
                 <div style="text-align:center; min-width:150px;">
-                    <p style="font-size:0.85em; color:#5c4a38;">Membre</p>
+                    <p style="font-size:0.85em; color:#3d5578;">Membre</p>
                     <div style="height:50px;"></div>
                     <p style="border-top:1px solid #ccc; padding-top:4px; font-size:0.8em;">Nom et signature</p>
                 </div>
@@ -2270,7 +2281,7 @@ function printDocument(type) {
         modalTitle.textContent = 'Résultats complets (1er Tour)';
         if (!ld.results1 || ld.results1.length === 0) { toast('Veuillez d\'abord calculer les résultats du 1er tour.', 'warning'); return; }
         const showMentionR = currentLevel !== 'bfem3';
-        const decColor = d => d === 'Admis' ? '#10b981' : d === '2ème Tour' ? '#f59e0b' : d === 'Ajourné' ? '#ef4444' : '#3E2415';
+        const decColor = d => d === 'Admis' ? '#10b981' : d === '2ème Tour' ? '#f59e0b' : d === 'Ajourné' ? '#ef4444' : '#022557';
         const sorted = [...ld.results1].sort((a, b) => a.rang - b.rang);
         html = docHeader('RÉSULTATS DU 1er TOUR', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
         let thead = '<table style="font-size:0.8em;"><thead><tr><th>N Tab</th><th>Prénom(s)</th><th>Nom</th>';
@@ -2301,7 +2312,7 @@ function printDocument(type) {
         modalTitle.textContent = 'Classement par mérite';
         if (!ld.results1 || ld.results1.length === 0) { toast('Veuillez d\'abord calculer les résultats.', 'warning'); return; }
         const showMentionC = currentLevel !== 'bfem3';
-        const decColorC = d => d === 'Admis' ? '#10b981' : d === '2ème Tour' ? '#f59e0b' : d === 'Ajourné' ? '#ef4444' : '#3E2415';
+        const decColorC = d => d === 'Admis' ? '#10b981' : d === '2ème Tour' ? '#f59e0b' : d === 'Ajourné' ? '#ef4444' : '#022557';
         const ranked = [...ld.results1].sort((a, b) => b.moyenne - a.moyenne);
         html = docHeader('CLASSEMENT PAR ORDRE DE MÉRITE', cfg.examLabel + ' ' + appData.year + ' - ' + cfg.className);
         html += `<table><thead><tr><th>Rang</th><th>N Tab</th><th>Prénom(s)</th><th>Nom</th><th>Moyenne</th><th>Décision</th>${showMentionC ? '<th>Mention</th>' : ''}</tr></thead><tbody>`;
@@ -2342,14 +2353,14 @@ function printDocument(type) {
         html += `<div style="margin-top:30px; display:flex; justify-content:space-between; padding:0 40px;">`;
         if (school.prefet) {
             html += `<div style="text-align:center;">
-                <p style="font-size:0.85em; color:#5c4a38;">Le Préfet</p>
-                <p style="font-size:0.95em; font-weight:700; color:#3E2415; margin-top:30px;">${school.prefet}</p>
+                <p style="font-size:0.85em; color:#3d5578;">Le Préfet</p>
+                <p style="font-size:0.95em; font-weight:700; color:#022557; margin-top:30px;">${school.prefet}</p>
             </div>`;
         }
         if (school.principal) {
             html += `<div style="text-align:center;">
-                <p style="font-size:0.85em; color:#5c4a38;">Le Directeur</p>
-                <p style="font-size:0.95em; font-weight:700; color:#3E2415; margin-top:30px;">${school.principal}</p>
+                <p style="font-size:0.85em; color:#3d5578;">Le Directeur</p>
+                <p style="font-size:0.95em; font-weight:700; color:#022557; margin-top:30px;">${school.principal}</p>
             </div>`;
         }
         html += `</div>`;
@@ -2469,7 +2480,7 @@ function exportBackupJSON() {
     const blob = new Blob([json], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     const date = new Date().toISOString().slice(0, 10);
-    a.download = `Backup_ExamBlanc_${date}.json`; a.click();
+    a.download = `SchoolPro_Sauvegarde_${date}.json`; a.click();
     try { localStorage.setItem(DERNIERE_SAUVEGARDE_KEY, date); } catch (e) {}
     masquerRappelSauvegarde();
     toast('Sauvegarde JSON exportée.', 'success');
@@ -2974,6 +2985,7 @@ function init() {
     ensureEleveIds();
     checkSession();
     applyHiddenModules();
+    majEnteteEtablissement();
     verifierRappelSauvegarde();
     populateYearSelect();
     updateLevelTags();
@@ -3781,9 +3793,9 @@ printDocument = function(type) {
                 datasets: [{
                     label: 'Moyenne de classe',
                     data,
-                    backgroundColor: 'rgba(184,166,122,0.25)',
-                    borderColor: '#9a8a60',
-                    pointBackgroundColor: '#3E2415',
+                    backgroundColor: 'rgba(1,121,246,0.25)',
+                    borderColor: '#0168e8',
+                    pointBackgroundColor: '#022557',
                     pointRadius: 4,
                     borderWidth: 2
                 }, {
@@ -3870,7 +3882,7 @@ printDocument = function(type) {
                     <span class="wi-cur">${cur === null ? '—' : cur.toFixed(2)}</span>
                     <span class="wi-need ${cls}">${label}</span>
                     <div>
-                        <div class="wi-bar"><div class="wi-bar-fill" style="width:${barPct}%; background:linear-gradient(90deg, #B8A67A, #3E2415);"></div></div>
+                        <div class="wi-bar"><div class="wi-bar-fill" style="width:${barPct}%; background:linear-gradient(90deg, #0179f6, #022557);"></div></div>
                         <div style="font-size:0.72em; color:var(--gray-500); margin-top:2px;">${effort}</div>
                     </div>
                 </div>`;
@@ -5062,7 +5074,7 @@ function formatDateNaissanceFR(iso) {
 }
 
 // ---------- Avatars (initiales colorées, façon CRM) ----------
-const CRM_AVATAR_COLORS = ['#8d7a4e', '#5a6b4a', '#6b4a5a', '#4a5a6b', '#7a5a3e', '#4e6b62', '#6b5e4a', '#54486b'];
+const CRM_AVATAR_COLORS = ['#536988', '#5a6b4a', '#6b4a5a', '#4a5a6b', '#435876', '#4e6b62', '#4c5869', '#54486b'];
 
 function crmAvatarColor(str) {
     let h = 0;
@@ -6029,7 +6041,7 @@ function genererBulletinsClasse(classeId) {
         const moy = moyenneEleve(classe, e.id);
         html += `<div class="bulletin-page" ${idx > 0 ? 'style="page-break-before:always; margin-top:30px;"' : ''}>`;
         html += docHeader('BULLETIN DE NOTES', `Année scolaire ${appData.year} — ${esc(classe.nom)} — ${TRIMESTRES[currentTrimestre]}`);
-        html += `<div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding:10px; background:#f5efe8; border-radius:8px;">
+        html += `<div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding:10px; background:#e8f1fd; border-radius:8px;">
             <div><b>Nom :</b> ${esc(e.nom)}</div>
             <div><b>Prénom(s) :</b> ${esc(e.prenom)}</div>
             <div><b>Sexe :</b> ${e.sexe === 'F' ? 'F' : 'M'}</div>
@@ -6050,13 +6062,13 @@ function genererBulletinsClasse(classeId) {
         });
         html += `</tbody></table>`;
         const pres = countPresences(classe.id, e.id);
-        html += `<div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:12px; padding:12px; background:#f5efe8; border-radius:8px; font-weight:700;">
+        html += `<div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:12px; padding:12px; background:#e8f1fd; border-radius:8px; font-weight:700;">
             <div>Total : ${totalPts.toFixed(2)} / ${totalCoefs * 20}</div>
             <div>Moyenne : ${moy !== null ? moy.toFixed(2) : '—'} / 20</div>
             <div>Rang : ${rangs[e.id] ? rangs[e.id] + ' / ' + moyennes.length : '—'}</div>
             <div>${moy !== null ? appreciationNote(moy) : ''}</div>
         </div>
-        <div style="margin-top:8px; padding:8px 12px; background:#faf8f5; border-radius:8px; font-size:0.9em;">
+        <div style="margin-top:8px; padding:8px 12px; background:#f5f9fe; border-radius:8px; font-size:0.9em;">
             Assiduité : <b>${pres.abs}</b> absence(s) — <b>${pres.ret}</b> retard(s)
         </div>`;
         html += `<div style="display:flex; justify-content:space-between; margin-top:28px; padding:0 20px; font-size:0.9em;">
@@ -6351,7 +6363,7 @@ function genererCartesClasse(classeId, eleveId) {
         ensureMatricule(e);
         html += `<div class="carte-eleve">
             <div class="carte-head">
-                <img src="logo.jpg" alt="Logo" class="carte-logo">
+                <img src="logo.png" alt="Logo" class="carte-logo">
                 <div class="carte-titre">
                     <div class="carte-ecole">${esc(ecole)}</div>
                     <div class="carte-sous">CARTE D'ÉLÈVE — ${esc(appData.year)}</div>
@@ -6612,7 +6624,7 @@ function imprimerDossierEleve() {
         const moy = moyenneEleveTrimestre(classe, e.id, t);
         const rg = rangEleveTrimestre(classe, e.id, t);
         moyennes.push(moy);
-        html += `<h4 style="margin:12px 0 6px; color:#3E2415;">${esc(TRIMESTRES[t])}</h4>`;
+        html += `<h4 style="margin:12px 0 6px; color:#022557;">${esc(TRIMESTRES[t])}</h4>`;
         if (moy === null) { html += '<p style="font-size:0.9em;"><i>Aucune note saisie.</i></p>'; return; }
         html += `<table><thead><tr><th style="text-align:left;">Matière</th><th>Coef</th><th>Note /20</th><th>Note × Coef</th></tr></thead><tbody>`;
         mats.forEach(m => {
@@ -6918,9 +6930,9 @@ function renderDossierEleve() {
             <td style="text-align:left;">${esc(p.nom)}${p.obligatoire ? ' <span style="color:#b91c1c;">*</span>' : ''}</td>
             <td>${piece
                 ? '<span style="color:#15803d; font-weight:700;">Fournie</span>'
-                : (p.obligatoire ? '<span style="color:#b91c1c; font-weight:700;">Manquante</span>' : '<span style="color:#7a6a58;">—</span>')}</td>
+                : (p.obligatoire ? '<span style="color:#b91c1c; font-weight:700;">Manquante</span>' : '<span style="color:#6b7f9e;">—</span>')}</td>
             <td>${piece ? formatDateNaissanceFR(piece.dateDepot) : '—'}</td>
-            <td style="font-size:0.88em;">${piece ? esc(piece.nomFichier) + '<br><span style="color:#7a6a58;">' + formatTaille(piece.taille) + '</span>' : '—'}</td>
+            <td style="font-size:0.88em;">${piece ? esc(piece.nomFichier) + '<br><span style="color:#6b7f9e;">' + formatTaille(piece.taille) + '</span>' : '—'}</td>
             <td class="no-print"><div class="btn-group">
                 ${piece
                     ? `<button class="btn btn-sm btn-info" onclick="ouvrirPiece('${e.id}', '${p.code}')">Ouvrir</button>
@@ -6930,7 +6942,7 @@ function renderDossierEleve() {
         </tr>`;
     }).join('') + '</tbody></table></div>';
 
-    html += `<p style="font-size:0.85em; color:#7a6a58; margin-top:10px;">
+    html += `<p style="font-size:0.85em; color:#6b7f9e; margin-top:10px;">
         <span style="color:#b91c1c;">*</span> pièce obligatoire. Formats acceptés : image ou PDF, ${formatTaille(DOC_TAILLE_MAX)} maximum par pièce.
         La liste des pièces se modifie dans Paramètres du dossier.</p>`;
 
@@ -7187,13 +7199,13 @@ function renderCahierTexte() {
         return;
     }
 
-    html += `<p style="font-size:0.9em; color:#5c4a38;"><strong>${seances.length}</strong> séance(s) enregistrée(s).</p>`;
+    html += `<p style="font-size:0.9em; color:#3d5578;"><strong>${seances.length}</strong> séance(s) enregistrée(s).</p>`;
     html += seances.map(s => `<div class="card" style="margin-bottom:10px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
             <div>
                 <strong>${formatDateNaissanceFR(s.date)}</strong> —
-                <span style="color:#8a6d3b;">${esc(nomMatiere(s.matiereCode))}</span>
-                ${s.profId ? `<span style="font-size:0.88em; color:#7a6a58;"> · ${esc(nomProf(s.profId))}</span>` : ''}
+                <span style="color:#0168e8;">${esc(nomMatiere(s.matiereCode))}</span>
+                ${s.profId ? `<span style="font-size:0.88em; color:#6b7f9e;"> · ${esc(nomProf(s.profId))}</span>` : ''}
             </div>
             <div class="btn-group no-print">
                 <button class="btn btn-sm btn-primary" onclick="ouvrirSeanceModal('${classeId}', '${s.id}')">Modifier</button>
@@ -7201,7 +7213,7 @@ function renderCahierTexte() {
             </div>
         </div>
         ${s.contenu ? `<p style="margin-top:8px; white-space:pre-wrap;">${esc(s.contenu)}</p>` : ''}
-        ${s.devoirs ? `<div style="margin-top:8px; padding:8px 12px; background:#faf8f5; border-radius:8px; font-size:0.92em;">
+        ${s.devoirs ? `<div style="margin-top:8px; padding:8px 12px; background:#f5f9fe; border-radius:8px; font-size:0.92em;">
             <strong>Devoirs :</strong> <span style="white-space:pre-wrap;">${esc(s.devoirs)}</span>
             ${s.dateRemise ? ` <em>— à rendre le ${formatDateNaissanceFR(s.dateRemise)}</em>` : ''}
         </div>` : ''}
@@ -7412,7 +7424,7 @@ function renderSortantsPage() {
     const tri = [...sortants].sort((a, b) =>
         String(b.anneeSortie).localeCompare(String(a.anneeSortie)) ||
         (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr'));
-    box.innerHTML = `<p style="font-size:0.9em; color:#5c4a38;"><strong>${sortants.length}</strong> ancien(s) élève(s) archivé(s).</p>
+    box.innerHTML = `<p style="font-size:0.9em; color:#3d5578;"><strong>${sortants.length}</strong> ancien(s) élève(s) archivé(s).</p>
         <div class="table-wrapper"><table>
             <thead><tr><th style="text-align:left;">Élève</th><th>IEN</th><th>Dernière classe</th><th>Année</th><th>Motif</th></tr></thead>
             <tbody>${tri.map(s => `<tr>
@@ -7511,7 +7523,7 @@ function renderPassageListe() {
 
     const n = v => classe.eleves.filter(e => (passageDecisions[e.id] || 'passe') === v).length;
     box.innerHTML = entete
-        + `<p style="font-size:0.9em; color:#5c4a38;">
+        + `<p style="font-size:0.9em; color:#3d5578;">
              <strong>${n('passe')}</strong> passe(nt) · <strong>${n('redouble')}</strong> redouble(nt) · <strong>${n('sortie')}</strong> sortie(s)
            </p>`
         + `<div class="table-wrapper"><table><thead><tr><th style="text-align:left;">Élève</th><th>Décision</th></tr></thead><tbody>${lignes}</tbody></table></div>`;
@@ -7615,7 +7627,7 @@ function renderEcoleMatieres() {
                  onclick="setMatiereCycle('${cy}')">${esc(CYCLES[cy].label)} <span style="opacity:0.7;">(${matieresOfCycle(ec, cy).length})</span></button>`
     ).join(' ');
     box.innerHTML = `<div class="btn-group no-print" style="margin-bottom:12px;">${onglets}</div>
-        <p style="font-size:0.88em; color:#5c4a38; margin-bottom:10px;">
+        <p style="font-size:0.88em; color:#3d5578; margin-bottom:10px;">
             Grille appliquée aux classes de <strong>${esc(CYCLES[currentMatiereCycle].sub)}</strong> —
             saisie des notes, bulletins et emplois du temps de ce cycle.
         </p>
@@ -8332,7 +8344,7 @@ function imprimerRecu(paiementId) {
     const nomClasse = found ? found.classe.nom : '';
     const ec = getEcoleData();
     let html = docHeader('REÇU DE PAIEMENT', 'N° ' + String(p.recu || '—').padStart(5, '0'));
-    html += `<div style="max-width:520px; margin:0 auto; border:2px solid #3E2415; border-radius:10px; padding:20px;">
+    html += `<div style="max-width:520px; margin:0 auto; border:2px solid #022557; border-radius:10px; padding:20px;">
         <table style="width:100%; border:none;"><tbody>
             <tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Date :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${formatDateNaissanceFR(p.date)}</td></tr>
             <tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Reçu de :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${esc(nomEleve)}${nomClasse ? ' (' + esc(nomClasse) + ')' : ''}</td></tr>
@@ -8340,7 +8352,7 @@ function imprimerRecu(paiementId) {
             <tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Mode de paiement :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${esc(p.mode || '')}</td></tr>
             ${p.note ? `<tr><td style="border:none; text-align:left; padding:6px 4px;"><b>Référence :</b></td><td style="border:none; text-align:right; padding:6px 4px;">${esc(p.note)}</td></tr>` : ''}
         </tbody></table>
-        <div style="margin-top:14px; padding:12px; background:#f5efe8; border-radius:8px; text-align:center; font-size:1.3em; font-weight:800;">
+        <div style="margin-top:14px; padding:12px; background:#e8f1fd; border-radius:8px; text-align:center; font-size:1.3em; font-weight:800;">
             ${formatMoney(p.montant)} CFA
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:30px; font-size:0.9em;">
@@ -8435,7 +8447,7 @@ function imprimerJournalCaisse() {
             <td style="text-align:right;">${e.type === 'recette' ? '+' : '−'} ${formatMoney(e.montant)}</td></tr>`;
     });
     html += `</tbody></table>
-        <div style="margin-top:12px; padding:12px; background:#f5efe8; border-radius:8px; display:flex; justify-content:space-between; font-weight:700;">
+        <div style="margin-top:12px; padding:12px; background:#e8f1fd; border-radius:8px; display:flex; justify-content:space-between; font-weight:700;">
             <div>Recettes : ${formatMoney(recettes)}</div>
             <div>Dépenses : ${formatMoney(depenses)}</div>
             <div>Solde : ${formatMoney(recettes - depenses)}</div>

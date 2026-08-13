@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gestion Examens Blancs - Collège Jean XXIII</title>
-    <link rel="icon" type="image/jpeg" href="logo.jpg">
-    <link rel="shortcut icon" type="image/jpeg" href="logo.jpg">
-    <link rel="apple-touch-icon" href="logo.jpg">
+    <title>SchoolPro — Gestion Scolaire</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="shortcut icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=elegance1">
+    <link rel="stylesheet" href="style.css?v=schoolpro1">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -175,10 +175,10 @@
 <!-- SIDEBAR -->
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-        <img src="logo.jpg" alt="Logo" class="sidebar-logo">
+        <img src="logo.png" alt="SchoolPro" class="sidebar-logo">
         <div class="sidebar-brand-text">
-            <div class="sidebar-title">Jean XXIII</div>
-            <div class="sidebar-subtitle">Examens Blancs</div>
+            <div class="sidebar-title">SchoolPro</div>
+            <div class="sidebar-subtitle">Gestion Scolaire</div>
         </div>
         <button class="sidebar-toggle" onclick="toggleSidebar()" title="Réduire" aria-label="Réduire la barre latérale">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -375,8 +375,9 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div>
-            <h1>Gestion des Examens Blancs</h1>
-            <div class="subtitle">Collège Jean XXIII - Tambacounda</div>
+            <h1>SchoolPro</h1>
+            <!-- Renseigné depuis les paramètres de l'établissement : voir majEnteteEtablissement() -->
+            <div class="subtitle" id="headerEtablissement">Gestion Scolaire</div>
         </div>
     </div>
     <div class="header-right">
@@ -1118,7 +1119,7 @@
 <!-- CHANGE PASSWORD MODAL -->
 <div class="modal-overlay" id="changePasswordModal">
     <div class="modal">
-        <h3>Changer mon mot de passe</h3>
+        <h3>Changer le mot de passe</h3>
         <p style="margin:4px 0 14px;color:var(--text-muted,#999);font-size:13px;">
             Compte : <strong id="cpRoleLabel"></strong>
         </p>
@@ -1399,6 +1400,6 @@
 </div><!-- END APP WRAPPER -->
 
 <script src="config.local.js"></script>
-<script src="app.js?v=elegance1"></script>
+<script src="app.js?v=schoolpro1"></script>
 </body>
 </html>
