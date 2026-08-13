@@ -1,6 +1,8 @@
 :root {
-    --primary: #022557;
-    --primary-dark: #011b48;
+    /* Le navy du logo (#022557) est quasi noir : parfait pour un texte, trop
+       lourd en aplat. On garde sa famille, un cran plus clair. */
+    --primary: #0d3172;
+    --primary-dark: #082452;
     --primary-light: #e8f1fd;
     --primary-50: #d7e6fb;
     --accent: #0179f6;
@@ -493,8 +495,8 @@ textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 
     outline-color: #f59e0b !important;
     box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25) !important;
 }
-.btn-primary { background: #022557; color: white; box-shadow: 0 1px 3px rgba(2,37,87,0.3); }
-.btn-primary:hover { background: #011b48; box-shadow: 0 3px 8px rgba(2,37,87,0.4); transform: translateY(-1px); }
+.btn-primary { background: #0d3172; color: white; box-shadow: 0 1px 3px rgba(13,49,114,0.3); }
+.btn-primary:hover { background: #082452; box-shadow: 0 3px 8px rgba(13,49,114,0.4); transform: translateY(-1px); }
 .btn-success { background: #10b981; color: white; box-shadow: 0 1px 3px rgba(16,185,129,0.3); }
 .btn-success:hover { background: #059669; box-shadow: 0 3px 8px rgba(16,185,129,0.35); transform: translateY(-1px); }
 .btn-danger { background: #c0392b; color: white; box-shadow: 0 1px 3px rgba(192,57,43,0.3); }
@@ -1379,7 +1381,7 @@ td input[type="number"]:focus {
     --sidebar-collapsed: 76px;
     --accent-2: #6366f1;
     --accent-3: #8b5cf6;
-    --sidebar-bg: linear-gradient(180deg, #01122f 0%, #011b48 60%, #022557 100%);
+    --sidebar-bg: linear-gradient(180deg, #0a2044 0%, #0d2c5e 60%, #123a72 100%);
     --sidebar-text: #c3d5f0;
     --sidebar-text-muted: #7d93b5;
     --sidebar-active: #0179f6;
@@ -4946,13 +4948,15 @@ html:not([data-theme="dark"]) .content-area .header-right select:hover {
    ================================================================ */
 
 :root {
-    --gold: #446ba1;            /* or antique — texte / décor sur fond clair */
-    --gold-soft: #7997c2;       /* or doux — bordures, lueurs */
-    --gold-bright: #8ba9d3;     /* or clair — gradients */
-    --champagne: #cedaec;       /* lavis champagne */
-    --paper: #e8edf5;           /* fond papier chaud */
-    --ink: #0f1a29;             /* encre espresso */
-    --hairline: #cad5e5;        /* filet discret */
+    /* Palette SchoolPro. Les noms datent de l'ancienne charte papier/or ;
+       les valeurs viennent du logo. */
+    --gold: #2c6bc4;            /* bleu moyen — texte / décor sur fond clair */
+    --gold-soft: #86a9d8;       /* bleu doux — bordures, lueurs */
+    --gold-bright: #a7c4ea;     /* bleu clair — gradients */
+    --champagne: #dfe9f7;       /* lavis bleuté */
+    --paper: #f3f7fc;           /* fond de page */
+    --ink: #16243a;             /* encre — texte principal */
+    --hairline: #dbe4f0;        /* filet discret */
     --shadow-sm: 0 1px 2px rgba(2,37,87,0.05);
     --shadow: 0 1px 2px rgba(2,37,87,0.05), 0 2px 8px -2px rgba(2,37,87,0.06);
     --shadow-md: 0 2px 4px rgba(2,37,87,0.04), 0 10px 24px -8px rgba(2,37,87,0.10);
@@ -5031,7 +5035,7 @@ table, .stat-card .number, .money-cell, .header-clock { font-variant-numeric: ta
 
 /* ---------- Sidebar — espresso profond ---------- */
 :root {
-    --sidebar-bg: linear-gradient(180deg, #070c14 0%, #0a111b 55%, #0b1727 100%);
+    --sidebar-bg: linear-gradient(180deg, #0a2044 0%, #0d2c5e 55%, #123a72 100%);
 }
 .sidebar { border-right: 1px solid rgba(121,151,194,0.14); box-shadow: 6px 0 32px rgba(0,0,0,0.22); }
 .sidebar::before { opacity: 0.7; }
@@ -5187,10 +5191,10 @@ table, .stat-card .number, .money-cell, .header-clock { font-variant-numeric: ta
     background: var(--champagne);
 }
 .content-area .level-btn.active {
-    background: linear-gradient(135deg, #132238 0%, #0c1522 100%);
-    border-color: #132238;
-    color: #dbe4f0;
-    box-shadow: 0 6px 16px -6px rgba(15,26,41,0.5);
+    background: linear-gradient(135deg, #1256b8 0%, #0a3a86 100%);
+    border-color: #0a3a86;
+    color: #ffffff;
+    box-shadow: 0 6px 16px -6px rgba(10,58,134,0.45);
 }
 .content-area .level-btn.active .level-count { background: rgba(139,169,211,0.28); color: #bfd0e8; }
 [data-theme="dark"] .content-area .level-bar { background: transparent; border-bottom-color: var(--hairline); }
@@ -5289,11 +5293,11 @@ tr:hover td { background: color-mix(in srgb, var(--champagne) 60%, transparent) 
 /* ---------- Boutons — unifiés ---------- */
 .btn { border-radius: 11px; font-weight: 650; }
 .btn-primary {
-    background: linear-gradient(135deg, #132744 0%, #0f1a29 100%);
-    box-shadow: 0 4px 12px -4px rgba(15,26,41,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    background: linear-gradient(135deg, #1462cf 0%, #0c4499 100%);
+    box-shadow: 0 4px 12px -4px rgba(12,68,153,0.4), inset 0 1px 0 rgba(255,255,255,0.14);
 }
 .btn-primary:hover {
-    background: linear-gradient(135deg, #1c3252 0%, #112035 100%);
+    background: linear-gradient(135deg, #1a72e6 0%, #0f52b4 100%);
     box-shadow: 0 8px 18px -6px rgba(15,26,41,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 .btn-info {
