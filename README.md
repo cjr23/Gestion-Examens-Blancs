@@ -2,7 +2,7 @@
 
 > Simple · Efficace · Connectée
 
-Application web de gestion scolaire pour les établissements sénégalais, développée pour le **Collège Jean XXIII** (Tambacounda). Partie de la gestion des examens blancs, elle couvre aujourd'hui l'ensemble du cycle scolaire — de l'inscription d'un élève au CI jusqu'à sa sortie en Terminale : dossiers administratifs, classes, notes, bulletins, assiduité, cahier de texte, emplois du temps, personnel et comptabilité.
+Application web de gestion scolaire pour les établissements sénégalais. Partie de la gestion des examens blancs, elle couvre aujourd'hui l'ensemble du cycle scolaire — de l'inscription d'un élève au CI jusqu'à sa sortie en Terminale : dossiers administratifs, classes, notes, bulletins, assiduité, cahier de texte, emplois du temps, personnel et comptabilité.
 
 Elle couvre les **trois cycles du système éducatif sénégalais** : Élémentaire (CI – CM2), Moyen (6ème – 3ème) et Secondaire (Seconde – Terminale).
 

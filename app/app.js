@@ -795,7 +795,9 @@ function showModule(m) {
 
 let appData = {
     year: '2025-2026',
-    school: { name: 'Collège Jean XXIII', ia: 'Tambacounda', ief: 'Tambacounda', dates: '', principal: '' },
+    // Aucun établissement par défaut : SchoolPro est un produit, l'école se
+    // renseigne dans Paramètres à la première utilisation.
+    school: { name: '', ia: '', ief: '', dates: '', principal: '' },
     levels: {}
 };
 
@@ -2254,7 +2256,7 @@ function printDocument(type) {
                 </table>`;
         }
 
-        html += `<p style="margin-top:15px;">Fait à ${school.ia || 'Tambacounda'}, le ____________________</p>
+        html += `<p style="margin-top:15px;">Fait à ${school.ia || '____________'}, le ____________________</p>
             <p style="margin-top:8px; font-style:italic;">Les membres du jury :</p>
             <div style="display:flex; justify-content:space-between; margin-top:30px; padding:0 20px;">
                 <div style="text-align:center; min-width:150px;">
@@ -2436,7 +2438,7 @@ function exportAllToExcel() {
 
         // Administration / signataires en bas de page (comme le pied des documents).
         rows += '<Row></Row><Row></Row>';
-        rows += `<Row><Cell><Data ss:Type="String">${xmlEsc('Fait à ' + (school.ia || 'Tambacounda') + ', le ____________________')}</Data></Cell></Row>`;
+        rows += `<Row><Cell><Data ss:Type="String">${xmlEsc('Fait à ' + (school.ia || '____________') + ', le ____________________')}</Data></Cell></Row>`;
         rows += '<Row></Row>';
         // Préfet à gauche, Directeur à droite — même ordre que le pied des documents imprimés.
         rows += `<Row><Cell><Data ss:Type="String">Le Préfet</Data></Cell><Cell ss:Index="4"><Data ss:Type="String">Le Directeur</Data></Cell></Row>`;
@@ -2557,7 +2559,7 @@ function importBackupJSON(input) {
 function confirmResetData() {
     showConfirm('Réinitialiser ?', 'ATTENTION : Toutes les données seront définitivement supprimées !', () => {
         localStorage.removeItem(STORAGE_KEY);
-        appData = { year: '2025-2026', school: { name: 'Collège Jean XXIII', ia: 'Tambacounda', ief: 'Tambacounda', dates: '', principal: '', prefet: '' }, levels: {} };
+        appData = { year: '2025-2026', school: { name: '', ia: '', ief: '', dates: '', principal: '', prefet: '' }, levels: {} };
         updateLevelTags();
         refreshCurrentPage();
         closeModal('backupModal');
@@ -4049,7 +4051,10 @@ printDocument = function(type) {
             return null;
         }
         const context = buildContext();
-        const system = `Tu es l'assistant vocal du Collège Jean XXIII (Tambacounda, Sénégal), plateforme de gestion des examens blancs (BFEM, Bac TS, Bac L2).
+        const etablissement = appData.school.name
+            ? `de ${appData.school.name}${appData.school.ia ? ' (' + appData.school.ia + ', Sénégal)' : ''}`
+            : 'de l\'établissement';
+        const system = `Tu es l'assistant vocal ${etablissement}, sur SchoolPro, plateforme de gestion scolaire (CFEE, BFEM, Bac TS, Bac L2).
 Tu réponds en français, de façon concise (2-3 phrases max pour la voix), en te basant UNIQUEMENT sur les données JSON fournies.
 IMPORTANT : ta réponse est lue à voix haute. Écris en texte simple, SANS Markdown ni mise en forme — pas d'astérisques (*), de dièses (#), de tirets de liste, de back-ticks ni d'emojis. Énonce les notes naturellement (« 12 sur 20 » plutôt que « 12/20 ») et écris les symboles en toutes lettres (« pour cent », « supérieur à »).
 Tu peux raisonner et calculer à partir de ces données : moyennes, classements, taux de réussite, comparaisons entre élèves, matières ou niveaux.
@@ -4858,7 +4863,7 @@ function openPresentationMode() {
     overlay.innerHTML = `
         <div class="presentation-header">
             <div class="presentation-title">
-                <div class="presentation-school">Collège Jean XXIII — Tambacounda</div>
+                <div class="presentation-school">${Security.escapeHTML(appData.school.name || 'SchoolPro')}${appData.school.ia ? ' — ' + Security.escapeHTML(appData.school.ia) : ''}</div>
                 <div class="presentation-exam">${LEVELS[currentLevel].examLabel || 'Examen Blanc'} — ${LEVELS[currentLevel].label}</div>
                 <div class="presentation-year">Année ${appData.year || ''}</div>
             </div>
